@@ -1,8 +1,8 @@
 # PI//LINK
 
-PI//LINK is a small peer-to-peer communication layer for Pi agents. It lets one Pi agent register, discover another local agent, send messages, receive live notifications, check an inbox, and reply through a lightweight Bun HTTP server.
+PI//LINK is a small peer-to-peer communication layer for Pi agents. It lets one Pi agent register, discover another local agent, send messages, receive live inbound session messages, check an inbox, and reply through a lightweight Bun HTTP server.
 
-V2 adds Server-Sent Events for live message notifications while keeping the actual message-reading flow manual. It is built for learning agent communication, context isolation, and peer workflows, not for production orchestration.
+V3 adds automatic inbound message injection on top of Server-Sent Events. It is built for learning agent communication, context isolation, and peer workflows, not for production orchestration.
 
 ## Architecture
 
@@ -10,7 +10,7 @@ V2 adds Server-Sent Events for live message notifications while keeping the actu
 Pi Agent A <-> PI//LINK Server <-> Pi Agent B
 ```
 
-The server runs on localhost, keeps all state in memory, exposes a JSON HTTP API, and provides one SSE stream per connected agent. Pi agents use extension tools for actions and receive notifications when new messages arrive.
+The server runs on localhost, keeps all state in memory, exposes a JSON HTTP API, and provides one SSE stream per connected agent. Pi agents use extension tools for actions and receive inbound PI//LINK messages directly in the active session.
 
 ## Setup
 
@@ -53,6 +53,7 @@ Start one Pi agent:
 PI_LINK_AGENT_NAME=prod \
 PI_LINK_AGENT_ROLE=gatekeeper \
 PI_LINK_SERVER_URL=http://127.0.0.1:3007 \
+PI_LINK_AUTO_INJECT=true \
 pi -e ./extensions/pi-link.ts
 ```
 
@@ -62,8 +63,11 @@ Start another:
 PI_LINK_AGENT_NAME=dev \
 PI_LINK_AGENT_ROLE=developer \
 PI_LINK_SERVER_URL=http://127.0.0.1:3007 \
+PI_LINK_AUTO_INJECT=true \
 pi -e ./extensions/pi-link.ts
 ```
+
+`PI_LINK_AUTO_INJECT` defaults to `true`. Set it to `false` to keep V2 notification-only behavior.
 
 ## Pi Tools
 
@@ -75,7 +79,7 @@ The extension registers:
 - `pi_link_reply`
 - `pi_link_heartbeat`
 
-Messages do not automatically trigger Pi turns. V2 SSE tells an agent that a message arrived, but agents still manually call inbox and reply tools.
+Inbound messages are injected into the active Pi session by default, but they do not automatically trigger Pi turns. Agents can still manually call inbox and reply tools.
 
 ## API
 
@@ -86,6 +90,7 @@ Messages do not automatically trigger Pi turns. V2 SSE tells an agent that a mes
 - `GET /events/:agentId`
 - `POST /messages`
 - `GET /messages/inbox/:agentId`
+- `POST /messages/:messageId/delivered`
 - `POST /messages/:messageId/reply`
 
 ## Example Workflow
@@ -95,11 +100,9 @@ Messages do not automatically trigger Pi turns. V2 SSE tells an agent that a mes
 3. Start a `dev` Pi agent with the extension.
 4. Ask `dev` to list agents.
 5. Ask `dev` to send a message to `prod`.
-6. `prod` receives a live notification.
-7. Ask `prod` to check its inbox.
-8. Ask `prod` to reply.
-9. `dev` receives a live notification.
-10. Ask `dev` to check its inbox.
+6. `prod` receives an injected PI//LINK message in-session.
+7. Ask `prod` to reply.
+8. `dev` receives an injected PI//LINK message in-session.
 
 ## Learning Docs
 
@@ -112,14 +115,14 @@ Read [Core Functionality](docs/core-functionality.md) for a walkthrough of the i
 - No authentication.
 - No encryption.
 - No persistence.
-- No automatic inbound message injection.
+- No automatic agent turn triggering.
 - No WebSockets.
 - No multi-machine networking.
 
 ## Future Roadmap
 
 - V2: SSE live communication. Done.
-- V3: automatic inbound message injection.
+- V3: automatic inbound message injection. Done.
 - V4: auth tokens.
 - V5: SQLite persistence.
 - V6: cross-machine networking.

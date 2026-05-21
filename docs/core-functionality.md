@@ -1,6 +1,6 @@
 # Core Functionality
 
-This document explains the main PI//LINK code paths. It focuses on the learning pieces: how agents register, how messages are stored, how SSE live notifications work, and why reading a message is still manual in V2.
+This document explains the main PI//LINK code paths. It focuses on the learning pieces: how agents register, how messages are stored, how SSE live delivery works, and how V3 injects inbound messages into a Pi session.
 
 ## Agent Registration
 
@@ -53,7 +53,7 @@ const message: AgentMessage = {
 };
 ```
 
-V2 then publishes a live notification after the message is stored.
+The route publishes a live event after the message is stored.
 
 ```ts
 const message = store.createMessage(input);
@@ -91,22 +91,27 @@ publishToAgent(message.toAgentId, {
 });
 ```
 
-The extension parses SSE frames from the streaming response. When it sees `message.created`, it notifies the user:
+The extension parses SSE frames from the streaming response. When it sees `message.created`, V3 injects the message into the active Pi session:
 
 ```ts
-ctx.ui.notify(
-  `PI//LINK message from ${event.message.fromAgentId}. Check inbox to read it.`,
-  "info",
+pi.sendMessage(
+  {
+    customType: "pi-link-message",
+    content: formatInboundMessage(message),
+    display: true,
+    details: { message },
+  },
+  { triggerTurn: false },
 );
 ```
 
-This is the key V2 behavior: live awareness without automatic session injection.
+This is the key V3 behavior: the user can see the inbound peer message immediately, but the receiving agent does not automatically start a turn.
 
-## Why SSE Does Not Mark Delivered
+Set `PI_LINK_AUTO_INJECT=false` to keep V2 behavior. In that mode, the extension only shows a UI notification and the agent can manually check inbox.
 
-SSE only says, "a message exists." It does not mean the agent has read it.
+## Delivery Status
 
-The inbox endpoint is still the read boundary:
+In V1 and V2, the inbox endpoint was the only delivery boundary:
 
 ```ts
 if (message.status === "pending") {
@@ -119,13 +124,28 @@ if (message.status === "pending") {
 }
 ```
 
-That separation keeps the state easy to reason about:
+V3 adds a second delivery boundary: successful injection. After `pi.sendMessage()` succeeds, the extension calls the delivered endpoint:
+
+```ts
+await requestJson<{ message: AgentMessage }>(
+  `/messages/${encodeURIComponent(messageId)}/delivered`,
+  { method: "POST" },
+);
+```
+
+The store handles this idempotently:
+
+```ts
+if (message.status !== "pending") {
+  return message;
+}
+```
+
+That keeps the state easy to reason about:
 
 - `pending`: message was sent and stored.
-- live SSE event: recipient was notified.
-- `delivered`: recipient checked inbox and received the message payload.
-
-V3 can build on this by injecting inbound messages into the Pi session with `pi.sendMessage()`, but V2 intentionally avoids that.
+- live SSE event: recipient's extension saw that a message exists.
+- `delivered`: recipient received the message through session injection or manual inbox check.
 
 ## Reconnect Behavior
 
@@ -143,18 +163,17 @@ while (!signal.aborted) {
 }
 ```
 
-There is no missed-event replay in V2. If a live event is missed during reconnect, the message is still safely stored and will appear when the agent checks its inbox.
+There is no missed-event replay. If a live event is missed during reconnect, the message is still safely stored and will appear when the agent checks its inbox.
 
 ## Manual Workflow
 
-V2 keeps the workflow explicit:
+V3 keeps the workflow visible without making agents autonomous:
 
 1. Agent A sends a message.
 2. Server stores the message as `pending`.
 3. Server pushes an SSE notification to Agent B.
-4. Agent B manually checks inbox.
-5. Server marks the message `delivered`.
-6. Agent B can reply.
+4. Agent B extension injects the message with `pi.sendMessage()`.
+5. Extension marks the message `delivered`.
+6. Agent B can reply when prompted or instructed.
 
-This keeps PI//LINK small while making live communication visible.
-
+This keeps PI//LINK small while making peer communication visible inside the session.
