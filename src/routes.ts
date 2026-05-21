@@ -45,6 +45,9 @@ async function routeRequest(request: Request): Promise<Response> {
   if (request.method === "POST" && url.pathname === "/agents/register") {
     const input = await parseRegisterAgentInput(request);
     const agent = store.registerAgent(input);
+    console.log(
+      `[pi-link] registered agent ${agent.id} name=${agent.name} role=${agent.role ?? "none"} session=${agent.sessionId}`,
+    );
     return jsonResponse({ agent });
   }
 
@@ -70,12 +73,16 @@ async function routeRequest(request: Request): Promise<Response> {
       return jsonError(ERROR_CODES.agentNotFound, "Agent does not exist.", 404);
     }
 
+    console.log(`[pi-link] heartbeat agent ${agent.id} name=${agent.name}`);
     return jsonResponse({ agent });
   }
 
   if (request.method === "POST" && url.pathname === "/messages") {
     const input = await parseCreateMessageInput(request);
     const message = store.createMessage(input);
+    console.log(
+      `[pi-link] message ${message.id} from=${message.fromAgentId} to=${message.toAgentId}`,
+    );
     return jsonResponse({ message });
   }
 
@@ -91,6 +98,7 @@ async function routeRequest(request: Request): Promise<Response> {
     }
 
     const messages = store.getInbox(agentId);
+    console.log(`[pi-link] inbox agent=${agentId} messages=${messages.length}`);
     return jsonResponse({ messages });
   }
 
@@ -107,6 +115,9 @@ async function routeRequest(request: Request): Promise<Response> {
 
     const input = await parseReplyToMessageInput(request);
     const message = store.replyToMessage(messageId, input);
+    console.log(
+      `[pi-link] reply ${message.id} replyTo=${message.replyToMessageId ?? messageId} from=${message.fromAgentId} to=${message.toAgentId}`,
+    );
     return jsonResponse({ message });
   }
 
@@ -204,4 +215,3 @@ function storeErrorResponse(error: StoreError): Response {
       return jsonError(error.code, error.message, 500);
   }
 }
-
