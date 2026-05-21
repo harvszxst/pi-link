@@ -14,6 +14,9 @@ import {
   readString,
 } from "./utils";
 
+/**
+ * Top-level Bun fetch handler that maps thrown domain errors to JSON responses.
+ */
 export async function handleRequest(request: Request): Promise<Response> {
   try {
     return await routeRequest(request);
@@ -31,6 +34,9 @@ export async function handleRequest(request: Request): Promise<Response> {
   }
 }
 
+/**
+ * Matches incoming HTTP requests to PI//LINK's JSON and SSE endpoints.
+ */
 async function routeRequest(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const pathParts = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
@@ -144,6 +150,9 @@ async function routeRequest(request: Request): Promise<Response> {
   return jsonError(ERROR_CODES.invalidRequest, "Route not found.", 404);
 }
 
+/**
+ * Reads and validates the agent registration JSON body.
+ */
 async function parseRegisterAgentInput(
   request: Request,
 ): Promise<RegisterAgentInput> {
@@ -168,6 +177,9 @@ async function parseRegisterAgentInput(
   return input;
 }
 
+/**
+ * Reads and validates a new outbound message JSON body.
+ */
 async function parseCreateMessageInput(
   request: Request,
 ): Promise<CreateMessageInput> {
@@ -187,6 +199,9 @@ async function parseCreateMessageInput(
   };
 }
 
+/**
+ * Reads and validates a reply JSON body.
+ */
 async function parseReplyToMessageInput(
   request: Request,
 ): Promise<ReplyToMessageInput> {
@@ -204,6 +219,9 @@ async function parseReplyToMessageInput(
   };
 }
 
+/**
+ * Parses a JSON request body and normalizes invalid bodies into PI//LINK errors.
+ */
 async function readJsonBody(request: Request): Promise<Record<string, unknown>> {
   let body: unknown;
 
@@ -220,10 +238,16 @@ async function readJsonBody(request: Request): Promise<Record<string, unknown>> 
   return body;
 }
 
+/**
+ * Throws an INVALID_REQUEST store error so route error mapping stays centralized.
+ */
 function throwInvalidRequest(message: string): never {
   throw new StoreError(ERROR_CODES.invalidRequest, message);
 }
 
+/**
+ * Converts domain errors into stable JSON error responses.
+ */
 function storeErrorResponse(error: StoreError): Response {
   switch (error.code) {
     case ERROR_CODES.invalidRequest:

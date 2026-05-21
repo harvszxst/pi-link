@@ -24,6 +24,9 @@ export class PiLinkStore {
   private readonly agentsBySessionId = new Map<string, string>();
   private readonly messagesById = new Map<string, AgentMessage>();
 
+  /**
+   * Creates a new agent or refreshes the existing agent for a known session ID.
+   */
   registerAgent(input: RegisterAgentInput): Agent {
     const now = nowIso();
     const existingId = this.agentsBySessionId.get(input.sessionId);
@@ -68,6 +71,9 @@ export class PiLinkStore {
     return agent;
   }
 
+  /**
+   * Returns online agents, optionally hiding the caller from peer discovery.
+   */
   listAgents(excludeAgentId?: string): Agent[] {
     return Array.from(this.agentsById.values()).filter((agent) => {
       return agent.status === "online" && agent.id !== excludeAgentId;
@@ -106,6 +112,9 @@ export class PiLinkStore {
     return message;
   }
 
+  /**
+   * Returns an agent inbox and marks pending messages as delivered.
+   */
   getInbox(agentId: string): AgentMessage[] {
     this.assertAgentExists(agentId, "Agent does not exist.");
 
@@ -128,6 +137,9 @@ export class PiLinkStore {
     return messages.map((message) => this.messagesById.get(message.id) ?? message);
   }
 
+  /**
+   * Creates a new message addressed back to the original message sender.
+   */
   replyToMessage(messageId: string, input: ReplyToMessageInput): AgentMessage {
     const original = this.messagesById.get(messageId);
     if (original === undefined) {
@@ -145,6 +157,9 @@ export class PiLinkStore {
     });
   }
 
+  /**
+   * Refreshes an agent's last-seen timestamp and online status.
+   */
   touchAgent(agentId: string): Agent | null {
     const agent = this.agentsById.get(agentId);
     if (agent === undefined) {
@@ -162,6 +177,9 @@ export class PiLinkStore {
     return updated;
   }
 
+  /**
+   * Raises a stable domain error when a route references an unknown agent.
+   */
   private assertAgentExists(agentId: string, message: string): void {
     if (!this.agentsById.has(agentId)) {
       throw new StoreError(ERROR_CODES.agentNotFound, message);
@@ -170,4 +188,3 @@ export class PiLinkStore {
 }
 
 export const store = new PiLinkStore();
-
