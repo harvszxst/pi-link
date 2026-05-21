@@ -74,6 +74,16 @@ export class PiLinkStore {
     });
   }
 
+  /**
+   * Reports whether an agent ID is currently registered in memory.
+   */
+  hasAgent(agentId: string): boolean {
+    return this.agentsById.has(agentId);
+  }
+
+  /**
+   * Creates a pending message after confirming both sender and target exist.
+   */
   createMessage(input: CreateMessageInput): AgentMessage {
     this.assertAgentExists(input.fromAgentId, "Sender agent does not exist.");
     this.assertAgentExists(input.toAgentId, "Target agent does not exist.");

@@ -24,6 +24,13 @@ export interface AgentMessage {
   replyToMessageId?: string;
 }
 
+export interface MessageCreatedEvent {
+  type: "message.created";
+  message: AgentMessage;
+}
+
+export type PiLinkEvent = MessageCreatedEvent;
+
 export interface RegisterAgentInput {
   name: string;
   role?: string;
@@ -54,4 +61,3 @@ export interface JsonError {
     message: string;
   };
 }
-

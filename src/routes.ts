@@ -1,4 +1,5 @@
 import { ERROR_CODES, SERVICE_NAME, VERSION } from "./constants";
+import { createEventStream, publishMessageCreated } from "./events";
 import { StoreError, store } from "./store";
 import type {
   CreateMessageInput,
@@ -58,6 +59,23 @@ async function routeRequest(request: Request): Promise<Response> {
   }
 
   if (
+    request.method === "GET" &&
+    pathParts.length === 2 &&
+    pathParts[0] === "events"
+  ) {
+    const agentId = pathParts[1];
+    if (agentId === undefined || agentId.length === 0) {
+      return jsonError(ERROR_CODES.invalidRequest, "Agent ID is required.", 400);
+    }
+
+    if (!store.hasAgent(agentId)) {
+      return jsonError(ERROR_CODES.agentNotFound, "Agent does not exist.", 404);
+    }
+
+    return createEventStream(agentId, request.signal);
+  }
+
+  if (
     request.method === "POST" &&
     pathParts.length === 3 &&
     pathParts[0] === "agents" &&
@@ -80,6 +98,7 @@ async function routeRequest(request: Request): Promise<Response> {
   if (request.method === "POST" && url.pathname === "/messages") {
     const input = await parseCreateMessageInput(request);
     const message = store.createMessage(input);
+    publishMessageCreated(message);
     console.log(
       `[pi-link] message ${message.id} from=${message.fromAgentId} to=${message.toAgentId}`,
     );
@@ -115,6 +134,7 @@ async function routeRequest(request: Request): Promise<Response> {
 
     const input = await parseReplyToMessageInput(request);
     const message = store.replyToMessage(messageId, input);
+    publishMessageCreated(message);
     console.log(
       `[pi-link] reply ${message.id} replyTo=${message.replyToMessageId ?? messageId} from=${message.fromAgentId} to=${message.toAgentId}`,
     );
