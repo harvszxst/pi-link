@@ -14,6 +14,9 @@ export const runtimeState: PiLinkRuntimeState = {
   sseConnected: false,
   heartbeatRunning: false,
   eventAbortController: undefined,
+  managedServerProcess: undefined,
+  managedServerPort: undefined,
+  managedServerStartedByExtension: false,
 };
 
 /**

@@ -2,12 +2,10 @@ import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-age
 import type { Agent, AgentMessage } from "../types";
 import {
   CONFIG_PATH,
-  DEFAULT_CONFIG,
   resolveConfig,
   saveConfig,
   updateSavedConfig,
 } from "./config";
-import { PiLinkClient } from "./client";
 import {
   applyRuntimeConfig,
   requireCurrentAgentId,
@@ -15,11 +13,16 @@ import {
 } from "./state";
 import {
   connectPiLink,
-  createConfiguredClient,
   createRuntimeClient,
   disconnectPiLink,
   formatConnectedSummary,
 } from "./runtime";
+import {
+  getServerStatus,
+  startManagedServer,
+  stopManagedServer,
+} from "./server-manager";
+import type { ServerStatus } from "./server-manager";
 import type { PiLinkConfig, PiLinkMode } from "./types";
 
 const HELP_TEXT = [
@@ -33,6 +36,9 @@ const HELP_TEXT = [
   "/pilink inbox",
   "/pilink auto on",
   "/pilink auto off",
+  "/pilink server start",
+  "/pilink server stop",
+  "/pilink server status",
   "/pilink config",
   "/pilink doctor",
 ].join("\n");
@@ -54,6 +60,9 @@ export function registerPiLinkCommands(pi: ExtensionAPI): void {
         "inbox",
         "auto on",
         "auto off",
+        "server start",
+        "server stop",
+        "server status",
         "config",
         "doctor",
         "help",
@@ -101,6 +110,9 @@ async function handlePiLinkCommand(
         return;
       case "auto":
         await autoCommand(subcommand, ctx);
+        return;
+      case "server":
+        await serverCommand(subcommand, ctx);
         return;
       case "config":
         await configCommand(ctx);
@@ -272,6 +284,43 @@ async function autoCommand(
   );
 }
 
+async function serverCommand(
+  subcommand: string | undefined,
+  ctx: ExtensionContext,
+): Promise<void> {
+  const config = await resolveConfig();
+
+  switch (subcommand) {
+    case "start": {
+      if (config.values.mode !== "local") {
+        ctx.ui.notify("Managed server start is only available in local mode.", "warning");
+        return;
+      }
+
+      const status = await startManagedServer(config.values.serverUrl);
+      ctx.ui.notify(formatServerStatus("PI//LINK Server", status), "info");
+      return;
+    }
+    case "stop": {
+      const stopped = stopManagedServer();
+      ctx.ui.notify(
+        stopped
+          ? "Managed PI//LINK server stopped."
+          : "No extension-managed PI//LINK server is running.",
+        stopped ? "info" : "warning",
+      );
+      return;
+    }
+    case "status": {
+      const status = await getServerStatus(config.values.serverUrl);
+      ctx.ui.notify(formatServerStatus("PI//LINK Server Status", status), "info");
+      return;
+    }
+    default:
+      ctx.ui.notify("Usage: /pilink server start|stop|status", "warning");
+  }
+}
+
 async function configCommand(ctx: ExtensionContext): Promise<void> {
   const config = await resolveConfig();
   const values = config.values;
@@ -292,15 +341,19 @@ async function configCommand(ctx: ExtensionContext): Promise<void> {
 
 async function doctorCommand(ctx: ExtensionContext): Promise<void> {
   const config = await resolveConfig();
-  const client = new PiLinkClient(config.values.serverUrl);
-  const serverOk = await checkServer(client);
+  const serverStatus = await getServerStatus(config.values.serverUrl);
+  const serverOk = serverStatus.reachable;
 
   ctx.ui.notify(
     [
       "PI//LINK Doctor",
       "",
       `Config: ${config.configExists ? "OK" : "missing"}`,
+      `Mode: ${config.values.mode}`,
       `Server: ${serverOk ? "OK" : "unreachable"}`,
+      `Server Managed: ${serverStatus.managed ? "yes" : "no"}`,
+      `Local Process: ${serverStatus.running ? "running" : "stopped"}`,
+      `Server Port: ${serverStatus.port ?? "unknown"}`,
       `Agent: ${runtimeState.connected ? "connected" : "disconnected"}`,
       `SSE: ${runtimeState.sseConnected ? "connected" : "disconnected"}`,
       `Auto Inject: ${runtimeState.autoInject ? "enabled" : "disabled"}`,
@@ -323,15 +376,6 @@ async function promptText(
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : current;
-}
-
-async function checkServer(client: PiLinkClient): Promise<boolean> {
-  try {
-    await client.health();
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function formatAgents(agents: Agent[]): string {
@@ -374,6 +418,18 @@ function formatInbox(messages: AgentMessage[]): string {
 
 function formatAgentLabel(agent: Agent): string {
   return `${agent.name} (${agent.role ?? "none"}) - ${agent.id}`;
+}
+
+function formatServerStatus(title: string, status: ServerStatus): string {
+  return [
+    title,
+    "",
+    `Reachable: ${status.reachable ? "yes" : "no"}`,
+    `Managed: ${status.managed ? "yes" : "no"}`,
+    `Local Process: ${status.running ? "running" : "stopped"}`,
+    `Started By Extension: ${status.startedByExtension ? "yes" : "no"}`,
+    `Port: ${status.port ?? "unknown"}`,
+  ].join("\n");
 }
 
 function formatEnvOverrides(): string {

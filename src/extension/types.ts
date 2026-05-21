@@ -1,3 +1,4 @@
+import type { ChildProcess } from "node:child_process";
 import type { Agent, AgentMessage } from "../types";
 
 export type PiLinkMode = "local" | "lan";
@@ -32,6 +33,9 @@ export interface PiLinkRuntimeState {
   sseConnected: boolean;
   heartbeatRunning: boolean;
   eventAbortController: AbortController | undefined;
+  managedServerProcess: ChildProcess | undefined;
+  managedServerPort: number | undefined;
+  managedServerStartedByExtension: boolean;
 }
 
 export interface MessageCreatedEvent {

@@ -8,6 +8,7 @@ import {
   markDisconnected,
   runtimeState,
 } from "./state";
+import { ensureLocalServer } from "./server-manager";
 import type {
   MessageCreatedEvent,
   PiLinkConfig,
@@ -29,6 +30,7 @@ export async function connectPiLink(
   disconnectPiLink();
 
   const config = await resolveConfig();
+  await ensureLocalServer(config.values);
   const client = new PiLinkClient(config.values.serverUrl);
   const input: {
     name: string;
