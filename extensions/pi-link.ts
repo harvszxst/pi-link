@@ -35,17 +35,20 @@ interface ExtensionState {
   sessionId: string;
   agentId: string | null;
   serverUrl: string;
+  autoInject: boolean;
   eventAbortController: AbortController | null;
 }
 
 const DEFAULT_SERVER_URL = "http://127.0.0.1:3007";
 const DEFAULT_AGENT_NAME = "dev";
 const DEFAULT_AGENT_ROLE = "developer";
+const DEFAULT_AUTO_INJECT = true;
 
 const state: ExtensionState = {
   sessionId: `session_${crypto.randomUUID()}`,
   agentId: null,
   serverUrl: DEFAULT_SERVER_URL,
+  autoInject: DEFAULT_AUTO_INJECT,
   eventAbortController: null,
 };
 
@@ -53,12 +56,13 @@ export default function piLink(pi: ExtensionAPI): void {
   pi.on("session_start", async (_event, ctx) => {
     stopEventLoop();
     state.serverUrl = readEnv("PI_LINK_SERVER_URL", DEFAULT_SERVER_URL);
+    state.autoInject = readBooleanEnv("PI_LINK_AUTO_INJECT", DEFAULT_AUTO_INJECT);
 
     try {
       const agent = await registerAgent();
       state.agentId = agent.id;
       ctx.ui.notify(`PI//LINK registered as ${agent.name} (${agent.id})`, "info");
-      startEventLoop(ctx);
+      startEventLoop(pi, ctx);
     } catch (error) {
       ctx.ui.notify(`PI//LINK registration failed: ${errorMessage(error)}`, "error");
     }
@@ -196,14 +200,14 @@ async function registerAgent(): Promise<Agent> {
 }
 
 /**
- * Starts the background SSE reconnect loop for live message notifications.
+ * Starts the background SSE reconnect loop for inbound message handling.
  */
-function startEventLoop(ctx: ExtensionContext): void {
+function startEventLoop(pi: ExtensionAPI, ctx: ExtensionContext): void {
   const agentId = requireCurrentAgentId();
   const abortController = new AbortController();
   state.eventAbortController = abortController;
 
-  void runEventLoop(agentId, ctx, abortController.signal);
+  void runEventLoop(agentId, pi, ctx, abortController.signal);
 }
 
 /**
@@ -219,6 +223,7 @@ function stopEventLoop(): void {
  */
 async function runEventLoop(
   agentId: string,
+  pi: ExtensionAPI,
   ctx: ExtensionContext,
   signal: AbortSignal,
 ): Promise<void> {
@@ -226,7 +231,7 @@ async function runEventLoop(
 
   while (!signal.aborted) {
     try {
-      await connectEventStream(agentId, ctx, signal);
+      await connectEventStream(agentId, pi, ctx, signal);
       reconnectDelayMs = 1_000;
     } catch (error) {
       if (signal.aborted) {
@@ -246,6 +251,7 @@ async function runEventLoop(
  */
 async function connectEventStream(
   agentId: string,
+  pi: ExtensionAPI,
   ctx: ExtensionContext,
   signal: AbortSignal,
 ): Promise<void> {
@@ -278,7 +284,7 @@ async function connectEventStream(
       buffer = frames.pop() ?? "";
 
       for (const frame of frames) {
-        handleEventFrame(frame, ctx);
+        await handleEventFrame(frame, pi, ctx);
       }
     }
   } finally {
@@ -287,9 +293,13 @@ async function connectEventStream(
 }
 
 /**
- * Parses a single SSE frame and notifies the user for message events.
+ * Parses a single SSE frame and injects or notifies for inbound messages.
  */
-function handleEventFrame(frame: string, ctx: ExtensionContext): void {
+async function handleEventFrame(
+  frame: string,
+  pi: ExtensionAPI,
+  ctx: ExtensionContext,
+): Promise<void> {
   const parsed = parseEventFrame(frame);
   if (parsed === null || parsed.event !== "message.created") {
     return;
@@ -300,10 +310,15 @@ function handleEventFrame(frame: string, ctx: ExtensionContext): void {
     return;
   }
 
-  ctx.ui.notify(
-    `PI//LINK message from ${event.message.fromAgentId}. Check inbox to read it.`,
-    "info",
-  );
+  if (!state.autoInject) {
+    ctx.ui.notify(
+      `PI//LINK message from ${event.message.fromAgentId}. Check inbox to read it.`,
+      "info",
+    );
+    return;
+  }
+
+  await injectInboundMessage(pi, event.message);
 }
 
 /**
@@ -359,6 +374,59 @@ function parseMessageCreatedEvent(data: string): MessageCreatedEvent | null {
 }
 
 /**
+ * Displays an inbound PI//LINK message in the current Pi session.
+ */
+async function injectInboundMessage(
+  pi: ExtensionAPI,
+  message: AgentMessage,
+): Promise<void> {
+  pi.sendMessage(
+    {
+      customType: "pi-link-message",
+      content: formatInboundMessage(message),
+      display: true,
+      details: {
+        message,
+      },
+    },
+    { triggerTurn: false },
+  );
+
+  await markMessageDelivered(message.id);
+}
+
+/**
+ * Marks an injected message as delivered on the PI//LINK server.
+ */
+async function markMessageDelivered(messageId: string): Promise<AgentMessage> {
+  const response = await requestJson<{ message: AgentMessage }>(
+    `/messages/${encodeURIComponent(messageId)}/delivered`,
+    { method: "POST" },
+  );
+
+  return response.message;
+}
+
+/**
+ * Formats the visible message body inserted into the Pi session.
+ */
+function formatInboundMessage(message: AgentMessage): string {
+  const replyLine =
+    message.replyToMessageId === undefined
+      ? ""
+      : `\nReply to: ${message.replyToMessageId}`;
+
+  return [
+    "PI//LINK inbound message",
+    "",
+    `From: ${message.fromAgentId}`,
+    `Message ID: ${message.id}${replyLine}`,
+    "",
+    message.content,
+  ].join("\n");
+}
+
+/**
  * Calls a PI//LINK JSON endpoint and raises server errors as JavaScript errors.
  */
 async function requestJson<T>(
@@ -403,6 +471,18 @@ function requireCurrentAgentId(): string {
 function readEnv(name: string, fallback: string): string {
   const value = process.env[name]?.trim();
   return value && value.length > 0 ? value : fallback;
+}
+
+/**
+ * Reads a boolean environment flag using true-by-default V3 semantics.
+ */
+function readBooleanEnv(name: string, fallback: boolean): boolean {
+  const value = process.env[name]?.trim().toLowerCase();
+  if (value === undefined || value.length === 0) {
+    return fallback;
+  }
+
+  return !["0", "false", "no", "off"].includes(value);
 }
 
 /**
