@@ -8,11 +8,11 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "latest",
-    "typebox": "latest"
+    "@mariozechner/pi-coding-agent": "latest",
+    "@sinclair/typebox": "latest"
   },
   "devDependencies": {
+    "@types/bun": "latest",
     "typescript": "latest"
   }
 }
-
