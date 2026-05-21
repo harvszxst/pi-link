@@ -4,16 +4,14 @@ This document explains the main PI//LINK code paths. It focuses on the learning 
 
 ## Agent Registration
 
-Pi loads the extension and fires `session_start`. The extension reads local environment variables, registers with the server, and stores the returned agent ID in memory.
+Pi loads the extension and fires `session_start`. The extension resolves config from environment variables, `~/.pi-link/config.json`, and defaults. It then registers with the server and stores the returned agent ID in runtime state.
 
 ```ts
-const response = await requestJson<{ agent: Agent }>("/agents/register", {
-  method: "POST",
-  body: {
-    name: readEnv("PI_LINK_AGENT_NAME", DEFAULT_AGENT_NAME),
-    role: readEnv("PI_LINK_AGENT_ROLE", DEFAULT_AGENT_ROLE),
-    sessionId: state.sessionId,
-  },
+const config = await resolveConfig();
+const agent = await client.registerAgent({
+  name: config.values.agentName,
+  role: config.values.agentRole,
+  sessionId: runtimeState.sessionId,
 });
 ```
 
@@ -24,6 +22,25 @@ const existingId = this.agentsBySessionId.get(input.sessionId);
 ```
 
 That gives a simple local lifecycle: restart the extension process and it gets a new session ID; re-register within the same process and it refreshes the existing agent.
+
+## Pi-Native Commands
+
+PI//LINK exposes one Pi slash command with subcommands:
+
+```txt
+/pilink setup
+/pilink connect
+/pilink agents
+/pilink send
+```
+
+The command layer is separate from the server client. Commands handle user interaction with `ctx.ui.input`, `ctx.ui.select`, and `ctx.ui.notify`; the client module handles HTTP calls. This keeps the installed extension flow close to normal Pi usage:
+
+```bash
+pi
+```
+
+Then configure and operate PI//LINK from inside Pi.
 
 ## Message Creation
 

@@ -47,6 +47,8 @@ PI_LINK_PORT=3007
 
 ## Running Pi Agents
 
+During development, load the extension from this checkout with `-e`.
+
 Start one Pi agent:
 
 ```bash
@@ -69,6 +71,23 @@ pi -e ./extensions/pi-link.ts
 
 `PI_LINK_AUTO_INJECT` defaults to `true`. Set it to `false` to keep V2 notification-only behavior.
 
+Once PI//LINK is packaged as an installed Pi extension, the intended UX is:
+
+```bash
+pi
+```
+
+Then inside Pi:
+
+```txt
+/pilink setup
+/pilink connect
+/pilink agents
+/pilink send
+```
+
+The extension stores normal user config at `~/.pi-link/config.json`. Environment variables still work as advanced overrides.
+
 ## Pi Tools
 
 The extension registers:
@@ -80,6 +99,22 @@ The extension registers:
 - `pi_link_heartbeat`
 
 Inbound messages are injected into the active Pi session by default, but they do not automatically trigger Pi turns. Agents can still manually call inbox and reply tools.
+
+## Pi Commands
+
+The extension registers `/pilink` with these subcommands:
+
+- `/pilink setup`
+- `/pilink connect`
+- `/pilink disconnect`
+- `/pilink status`
+- `/pilink agents`
+- `/pilink send`
+- `/pilink inbox`
+- `/pilink auto on`
+- `/pilink auto off`
+- `/pilink config`
+- `/pilink doctor`
 
 ## API
 
