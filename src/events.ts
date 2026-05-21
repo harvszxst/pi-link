@@ -23,7 +23,11 @@ export function createEventStream(agentId: string, signal: AbortSignal): Respons
         agentId,
         controller,
         keepAlive: setInterval(() => {
-          sendRaw(controller, ": ping\n\n");
+          try {
+            sendRaw(controller, ": ping\n\n");
+          } catch {
+            removeClientById(agentId, clientId);
+          }
         }, 25_000),
       };
 
@@ -115,4 +119,3 @@ function sendRaw(
 ): void {
   controller.enqueue(encoder.encode(payload));
 }
-

@@ -16,4 +16,3 @@ Bun.serve({
 });
 
 console.log(`${SERVICE_NAME} ${VERSION} listening on http://${hostname}:${port}`);
-

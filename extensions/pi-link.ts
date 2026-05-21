@@ -238,7 +238,9 @@ async function runEventLoop(
         return;
       }
 
-      console.warn(`PI//LINK event stream failed: ${errorMessage(error)}`);
+      if (!isExpectedEventStreamClose(error)) {
+        console.warn(`PI//LINK event stream failed: ${errorMessage(error)}`);
+      }
     }
 
     await sleep(reconnectDelayMs, signal);
@@ -553,6 +555,22 @@ function formatJson(value: unknown): string {
  */
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Treats routine fetch stream termination as a quiet reconnect condition.
+ */
+function isExpectedEventStreamClose(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return true;
+  }
+
+  const message = errorMessage(error).toLowerCase();
+  return (
+    message === "terminated" ||
+    message.includes("aborted") ||
+    message.includes("closed")
+  );
 }
 
 /**

@@ -17,9 +17,12 @@ import {
 /**
  * Top-level Bun fetch handler that maps thrown domain errors to JSON responses.
  */
-export async function handleRequest(request: Request): Promise<Response> {
+export async function handleRequest(
+  request: Request,
+  server?: Bun.Server<unknown>,
+): Promise<Response> {
   try {
-    return await routeRequest(request);
+    return await routeRequest(request, server);
   } catch (error) {
     if (error instanceof StoreError) {
       return storeErrorResponse(error);
@@ -37,7 +40,10 @@ export async function handleRequest(request: Request): Promise<Response> {
 /**
  * Matches incoming HTTP requests to PI//LINK's JSON and SSE endpoints.
  */
-async function routeRequest(request: Request): Promise<Response> {
+async function routeRequest(
+  request: Request,
+  server?: Bun.Server<unknown>,
+): Promise<Response> {
   const url = new URL(request.url);
   const pathParts = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
 
@@ -78,6 +84,7 @@ async function routeRequest(request: Request): Promise<Response> {
       return jsonError(ERROR_CODES.agentNotFound, "Agent does not exist.", 404);
     }
 
+    server?.timeout(request, 0);
     return createEventStream(agentId, request.signal);
   }
 
