@@ -1,8 +1,8 @@
 # PI//LINK
 
-PI//LINK is a small peer-to-peer communication layer for Pi agents. It lets one Pi agent register, discover another local agent, send messages, check an inbox, and reply through a lightweight Bun HTTP server.
+PI//LINK is a small peer-to-peer communication layer for Pi agents. It lets one Pi agent register, discover another local agent, send messages, receive live notifications, check an inbox, and reply through a lightweight Bun HTTP server.
 
-V1 is intentionally minimal. It is built for learning agent communication, context isolation, and manual peer workflows, not for production orchestration.
+V2 adds Server-Sent Events for live message notifications while keeping the actual message-reading flow manual. It is built for learning agent communication, context isolation, and peer workflows, not for production orchestration.
 
 ## Architecture
 
@@ -10,7 +10,7 @@ V1 is intentionally minimal. It is built for learning agent communication, conte
 Pi Agent A <-> PI//LINK Server <-> Pi Agent B
 ```
 
-The server runs on localhost, keeps all state in memory, and exposes a JSON HTTP API. Pi agents use the extension tools to call that API manually.
+The server runs on localhost, keeps all state in memory, exposes a JSON HTTP API, and provides one SSE stream per connected agent. Pi agents use extension tools for actions and receive notifications when new messages arrive.
 
 ## Setup
 
@@ -75,7 +75,7 @@ The extension registers:
 - `pi_link_reply`
 - `pi_link_heartbeat`
 
-Messages do not automatically trigger Pi turns. Agents must manually call inbox and reply tools.
+Messages do not automatically trigger Pi turns. V2 SSE tells an agent that a message arrived, but agents still manually call inbox and reply tools.
 
 ## API
 
@@ -83,6 +83,7 @@ Messages do not automatically trigger Pi turns. Agents must manually call inbox 
 - `POST /agents/register`
 - `GET /agents?exclude=agent_id`
 - `POST /agents/:agentId/heartbeat`
+- `GET /events/:agentId`
 - `POST /messages`
 - `GET /messages/inbox/:agentId`
 - `POST /messages/:messageId/reply`
@@ -94,9 +95,15 @@ Messages do not automatically trigger Pi turns. Agents must manually call inbox 
 3. Start a `dev` Pi agent with the extension.
 4. Ask `dev` to list agents.
 5. Ask `dev` to send a message to `prod`.
-6. Ask `prod` to check its inbox.
-7. Ask `prod` to reply.
-8. Ask `dev` to check its inbox.
+6. `prod` receives a live notification.
+7. Ask `prod` to check its inbox.
+8. Ask `prod` to reply.
+9. `dev` receives a live notification.
+10. Ask `dev` to check its inbox.
+
+## Learning Docs
+
+Read [Core Functionality](docs/core-functionality.md) for a walkthrough of the important code paths and snippets.
 
 ## Current Limitations
 
@@ -106,12 +113,12 @@ Messages do not automatically trigger Pi turns. Agents must manually call inbox 
 - No encryption.
 - No persistence.
 - No automatic inbound message injection.
-- No SSE or WebSockets.
+- No WebSockets.
 - No multi-machine networking.
 
 ## Future Roadmap
 
-- V2: SSE live communication.
+- V2: SSE live communication. Done.
 - V3: automatic inbound message injection.
 - V4: auth tokens.
 - V5: SQLite persistence.
@@ -119,4 +126,3 @@ Messages do not automatically trigger Pi turns. Agents must manually call inbox 
 - V7: verifier agents.
 - V8: orchestration and agent chains.
 - V9: session replay and observability.
-
