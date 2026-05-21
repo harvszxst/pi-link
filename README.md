@@ -1,6 +1,6 @@
 # PI//LINK
 
-PI//LINK is a small peer-to-peer communication layer for Pi agents. It lets one Pi agent register, discover another local agent, send messages, receive live inbound session messages, check an inbox, and reply through a lightweight Bun HTTP server.
+PI//LINK is a small peer-to-peer communication layer for Pi agents. It lets one Pi agent register, discover another local agent, send messages, receive live inbound session messages, check an inbox, and reply through a lightweight local HTTP server.
 
 V3 adds automatic inbound message injection on top of Server-Sent Events. It is built for learning agent communication, context isolation, and peer workflows, not for production orchestration.
 
@@ -29,7 +29,7 @@ bun run check
 ## Running The Server
 
 ```bash
-bun src/server.ts
+npm run start
 ```
 
 By default the server listens on:
@@ -44,6 +44,8 @@ Optional server environment variables:
 PI_LINK_HOST=127.0.0.1
 PI_LINK_PORT=3007
 ```
+
+Installed packages also expose a `pi-link-server` bin. In `local` mode, the Pi extension can start this server automatically when `/pilink connect` runs and no configured server is reachable. In `lan` mode, the extension never auto-starts a local server and only connects to the configured URL.
 
 ## Running Pi Agents
 
@@ -113,6 +115,9 @@ The extension registers `/pilink` with these subcommands:
 - `/pilink inbox`
 - `/pilink auto on`
 - `/pilink auto off`
+- `/pilink server start`
+- `/pilink server stop`
+- `/pilink server status`
 - `/pilink config`
 - `/pilink doctor`
 
@@ -130,14 +135,15 @@ The extension registers `/pilink` with these subcommands:
 
 ## Example Workflow
 
-1. Start the PI//LINK server.
-2. Start a `prod` Pi agent with the extension.
-3. Start a `dev` Pi agent with the extension.
-4. Ask `dev` to list agents.
-5. Ask `dev` to send a message to `prod`.
-6. `prod` receives an injected PI//LINK message in-session.
-7. Ask `prod` to reply.
-8. `dev` receives an injected PI//LINK message in-session.
+1. Start a `prod` Pi agent with the extension.
+2. Run `/pilink setup` if needed.
+3. Run `/pilink connect`; in local mode this starts the server if needed.
+4. Start and connect a `dev` Pi agent with the extension.
+5. Ask `dev` to list agents.
+6. Ask `dev` to send a message to `prod`.
+7. `prod` receives an injected PI//LINK message in-session.
+8. Ask `prod` to reply.
+9. `dev` receives an injected PI//LINK message in-session.
 
 ## Learning Docs
 

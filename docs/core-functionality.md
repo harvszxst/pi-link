@@ -30,11 +30,14 @@ PI//LINK exposes one Pi slash command with subcommands:
 ```txt
 /pilink setup
 /pilink connect
+/pilink server start
+/pilink server stop
+/pilink server status
 /pilink agents
 /pilink send
 ```
 
-The command layer is separate from the server client. Commands handle user interaction with `ctx.ui.input`, `ctx.ui.select`, and `ctx.ui.notify`; the client module handles HTTP calls. This keeps the installed extension flow close to normal Pi usage:
+The command layer is separate from the server client. Commands handle user interaction with `ctx.ui.input`, `ctx.ui.select`, and `ctx.ui.notify`; the client module handles HTTP calls. In `local` mode, `/pilink connect` checks `/health` and starts the package `pi-link-server` bin when no server is reachable. In `lan` mode, it only connects to the configured URL. This keeps the installed extension flow close to normal Pi usage:
 
 ```bash
 pi
