@@ -131,6 +131,22 @@ async function routeRequest(request: Request): Promise<Response> {
     request.method === "POST" &&
     pathParts.length === 3 &&
     pathParts[0] === "messages" &&
+    pathParts[2] === "delivered"
+  ) {
+    const messageId = pathParts[1];
+    if (messageId === undefined || messageId.length === 0) {
+      return jsonError(ERROR_CODES.invalidRequest, "Message ID is required.", 400);
+    }
+
+    const message = store.markMessageDelivered(messageId);
+    console.log(`[pi-link] delivered message=${message.id} to=${message.toAgentId}`);
+    return jsonResponse({ message });
+  }
+
+  if (
+    request.method === "POST" &&
+    pathParts.length === 3 &&
+    pathParts[0] === "messages" &&
     pathParts[2] === "reply"
   ) {
     const messageId = pathParts[1];

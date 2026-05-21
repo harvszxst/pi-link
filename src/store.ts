@@ -138,6 +138,33 @@ export class PiLinkStore {
   }
 
   /**
+   * Marks one pending message as delivered without reading the full inbox.
+   */
+  markMessageDelivered(messageId: string): AgentMessage {
+    const message = this.messagesById.get(messageId);
+    if (message === undefined) {
+      throw new StoreError(
+        ERROR_CODES.messageNotFound,
+        "Message does not exist.",
+      );
+    }
+
+    if (message.status !== "pending") {
+      return message;
+    }
+
+    const delivered: AgentMessage = {
+      ...message,
+      status: "delivered",
+      deliveredAt: nowIso(),
+    };
+
+    this.messagesById.set(delivered.id, delivered);
+
+    return delivered;
+  }
+
+  /**
    * Creates a new message addressed back to the original message sender.
    */
   replyToMessage(messageId: string, input: ReplyToMessageInput): AgentMessage {
