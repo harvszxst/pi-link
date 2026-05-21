@@ -1,4 +1,7 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+} from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 
 interface Agent {
@@ -23,10 +26,16 @@ interface AgentMessage {
   replyToMessageId?: string;
 }
 
+interface MessageCreatedEvent {
+  type: "message.created";
+  message: AgentMessage;
+}
+
 interface ExtensionState {
   sessionId: string;
   agentId: string | null;
   serverUrl: string;
+  eventAbortController: AbortController | null;
 }
 
 const DEFAULT_SERVER_URL = "http://127.0.0.1:3007";
@@ -37,16 +46,19 @@ const state: ExtensionState = {
   sessionId: `session_${crypto.randomUUID()}`,
   agentId: null,
   serverUrl: DEFAULT_SERVER_URL,
+  eventAbortController: null,
 };
 
 export default function piLink(pi: ExtensionAPI): void {
   pi.on("session_start", async (_event, ctx) => {
+    stopEventLoop();
     state.serverUrl = readEnv("PI_LINK_SERVER_URL", DEFAULT_SERVER_URL);
 
     try {
       const agent = await registerAgent();
       state.agentId = agent.id;
       ctx.ui.notify(`PI//LINK registered as ${agent.name} (${agent.id})`, "info");
+      startEventLoop(ctx);
     } catch (error) {
       ctx.ui.notify(`PI//LINK registration failed: ${errorMessage(error)}`, "error");
     }
@@ -167,6 +179,9 @@ export default function piLink(pi: ExtensionAPI): void {
   });
 }
 
+/**
+ * Registers the current Pi session as a PI//LINK agent.
+ */
 async function registerAgent(): Promise<Agent> {
   const response = await requestJson<{ agent: Agent }>("/agents/register", {
     method: "POST",
@@ -180,6 +195,172 @@ async function registerAgent(): Promise<Agent> {
   return response.agent;
 }
 
+/**
+ * Starts the background SSE reconnect loop for live message notifications.
+ */
+function startEventLoop(ctx: ExtensionContext): void {
+  const agentId = requireCurrentAgentId();
+  const abortController = new AbortController();
+  state.eventAbortController = abortController;
+
+  void runEventLoop(agentId, ctx, abortController.signal);
+}
+
+/**
+ * Stops any active SSE loop before session switches or extension shutdown.
+ */
+function stopEventLoop(): void {
+  state.eventAbortController?.abort();
+  state.eventAbortController = null;
+}
+
+/**
+ * Keeps an SSE connection open and reconnects with simple backoff on failure.
+ */
+async function runEventLoop(
+  agentId: string,
+  ctx: ExtensionContext,
+  signal: AbortSignal,
+): Promise<void> {
+  let reconnectDelayMs = 1_000;
+
+  while (!signal.aborted) {
+    try {
+      await connectEventStream(agentId, ctx, signal);
+      reconnectDelayMs = 1_000;
+    } catch (error) {
+      if (signal.aborted) {
+        return;
+      }
+
+      console.warn(`PI//LINK event stream failed: ${errorMessage(error)}`);
+    }
+
+    await sleep(reconnectDelayMs, signal);
+    reconnectDelayMs = Math.min(reconnectDelayMs * 2, 10_000);
+  }
+}
+
+/**
+ * Reads one SSE response stream and dispatches each completed event frame.
+ */
+async function connectEventStream(
+  agentId: string,
+  ctx: ExtensionContext,
+  signal: AbortSignal,
+): Promise<void> {
+  const response = await fetch(
+    `${state.serverUrl}/events/${encodeURIComponent(agentId)}`,
+    { signal },
+  );
+
+  if (!response.ok) {
+    throw new Error(`event stream HTTP ${response.status}`);
+  }
+
+  if (response.body === null) {
+    throw new Error("event stream response had no body");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (!signal.aborted) {
+      const result = await reader.read();
+      if (result.done) {
+        return;
+      }
+
+      buffer += decoder.decode(result.value, { stream: true });
+      const frames = buffer.split("\n\n");
+      buffer = frames.pop() ?? "";
+
+      for (const frame of frames) {
+        handleEventFrame(frame, ctx);
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+/**
+ * Parses a single SSE frame and notifies the user for message events.
+ */
+function handleEventFrame(frame: string, ctx: ExtensionContext): void {
+  const parsed = parseEventFrame(frame);
+  if (parsed === null || parsed.event !== "message.created") {
+    return;
+  }
+
+  const event = parseMessageCreatedEvent(parsed.data);
+  if (event === null) {
+    return;
+  }
+
+  ctx.ui.notify(
+    `PI//LINK message from ${event.message.fromAgentId}. Check inbox to read it.`,
+    "info",
+  );
+}
+
+/**
+ * Converts raw SSE frame text into event name and data strings.
+ */
+function parseEventFrame(frame: string): { event: string; data: string } | null {
+  let event = "message";
+  const dataLines: string[] = [];
+
+  for (const line of frame.split("\n")) {
+    if (line.startsWith(":")) {
+      continue;
+    }
+
+    if (line.startsWith("event:")) {
+      event = line.slice("event:".length).trim();
+      continue;
+    }
+
+    if (line.startsWith("data:")) {
+      dataLines.push(line.slice("data:".length).trimStart());
+    }
+  }
+
+  if (dataLines.length === 0) {
+    return null;
+  }
+
+  return {
+    event,
+    data: dataLines.join("\n"),
+  };
+}
+
+/**
+ * Safely decodes PI//LINK message event JSON.
+ */
+function parseMessageCreatedEvent(data: string): MessageCreatedEvent | null {
+  let value: unknown;
+
+  try {
+    value = JSON.parse(data) as unknown;
+  } catch {
+    return null;
+  }
+
+  if (typeof value !== "object" || value === null || !("type" in value)) {
+    return null;
+  }
+
+  const event = value as MessageCreatedEvent;
+  return event.type === "message.created" ? event : null;
+}
+
+/**
+ * Calls a PI//LINK JSON endpoint and raises server errors as JavaScript errors.
+ */
 async function requestJson<T>(
   path: string,
   options: { method?: string; body?: Record<string, unknown> } = {},
@@ -205,6 +386,9 @@ async function requestJson<T>(
   return payload as T;
 }
 
+/**
+ * Returns the registered agent ID or fails fast before tools call the server.
+ */
 function requireCurrentAgentId(): string {
   if (state.agentId === null) {
     throw new Error("PI//LINK agent is not registered yet.");
@@ -213,11 +397,17 @@ function requireCurrentAgentId(): string {
   return state.agentId;
 }
 
+/**
+ * Reads a non-empty environment variable or falls back to a default.
+ */
 function readEnv(name: string, fallback: string): string {
   const value = process.env[name]?.trim();
   return value && value.length > 0 ? value : fallback;
 }
 
+/**
+ * Narrows Pi tool params into a simple string dictionary.
+ */
 function asStringParams(params: unknown): Record<string, string> {
   if (typeof params !== "object" || params === null) {
     return {};
@@ -233,6 +423,9 @@ function asStringParams(params: unknown): Record<string, string> {
   return output;
 }
 
+/**
+ * Returns a required string tool parameter or throws a user-visible error.
+ */
 function requireStringParam(params: Record<string, string>, key: string): string {
   const value = params[key];
   if (value === undefined || value.trim().length === 0) {
@@ -242,6 +435,9 @@ function requireStringParam(params: Record<string, string>, key: string): string
   return value;
 }
 
+/**
+ * Extracts a PI//LINK JSON error message from a failed response payload.
+ */
 function readErrorPayload(payload: unknown): string | null {
   if (typeof payload !== "object" || payload === null || !("error" in payload)) {
     return null;
@@ -255,6 +451,9 @@ function readErrorPayload(payload: unknown): string | null {
   return typeof error.message === "string" ? error.message : null;
 }
 
+/**
+ * Formats text and structured details for a Pi tool result.
+ */
 function toolResult(text: string, details: Record<string, unknown>) {
   return {
     content: [{ type: "text" as const, text }],
@@ -262,10 +461,38 @@ function toolResult(text: string, details: Record<string, unknown>) {
   };
 }
 
+/**
+ * Renders structured tool output for humans while preserving details for Pi.
+ */
 function formatJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
+/**
+ * Normalizes unknown thrown values into readable text.
+ */
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Waits for a reconnect delay, resolving early when the SSE loop is aborted.
+ */
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+
+    const timeout = setTimeout(resolve, ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timeout);
+        resolve();
+      },
+      { once: true },
+    );
+  });
 }
