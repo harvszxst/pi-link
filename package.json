@@ -1,10 +1,14 @@
 {
   "name": "pi-link",
   "version": "0.3.0",
-  "private": true,
+  "private": false,
   "type": "module",
+  "bin": {
+    "pi-link-server": "./bin/pi-link-server.mjs"
+  },
   "scripts": {
-    "start": "bun src/server.ts",
+    "start": "node ./bin/pi-link-server.mjs",
+    "start:bun": "bun src/server.ts",
     "check": "tsc --noEmit"
   },
   "dependencies": {
