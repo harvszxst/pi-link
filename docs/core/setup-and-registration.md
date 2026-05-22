@@ -24,6 +24,8 @@ export const DEFAULT_CONFIG: PiLinkConfig = {
 };
 ```
 
+On startup, PI//LINK does not auto-register. With no config, it shows a setup hint. With saved config, it shows a non-blocking hint to run `/pilink setup`. Networks are one-time runtime sessions; restarting Pi means starting or joining a new network through setup.
+
 ## Setup Flow
 
 `/pilink setup` is the primary onboarding command. It asks for the mode first:
@@ -32,7 +34,7 @@ export const DEFAULT_CONFIG: PiLinkConfig = {
 - `lan`: asks for the server URL and never starts a local server.
 - `remote`: shows a friendly future Tailscale integration note and stops without saving or connecting.
 
-After mode selection, setup asks whether to create or join a network and stores the network name locally. This is a label for now; it does not change server routing or isolate agents.
+After mode selection, setup asks whether to create or join a network and stores the network name locally. Agents only list and send within the active network, and member sends are blocked if that network has no online host.
 
 ```ts
 const config: PiLinkConfig = {
@@ -60,6 +62,8 @@ Registration sends the current Pi session identity to the server:
 ```ts
 const agent = await client.registerAgent({
   name: config.values.agentName,
+  networkName: config.values.networkName,
+  networkRole: config.values.networkAction === "create" ? "host" : "member",
   role: config.values.agentRole,
   sessionId: runtimeState.sessionId,
 });
