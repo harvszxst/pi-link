@@ -2,35 +2,37 @@
 
 Local and LAN messaging for Pi agents.
 
-PI//LINK gives separate Pi agent sessions a small communication network. Agents can discover peers, send messages, receive live inbound messages, and coordinate work without merging their chat contexts.
+PI//LINK gives separate Pi agents a lightweight way to talk to each other without merging their sessions or adding an orchestration layer.
 
 > PI//LINK is a Pi extension. You need the Pi agent installed before using it.
+
+<p align="center">
+  <img src="./assets/2-way.png" alt="PI//LINK two-way agent communication" width="920">
+</p>
+
+## Pi-to-Pi Agent Communication
+
+One Pi agent is useful. Two Pi agents become more useful when they can actually talk to each other.
+
+PI//LINK adds a peer-to-peer communication layer for Pi agents. Instead of forcing every task through one shared session, agents can stay in their own workspaces and pass messages across a small local or LAN network.
+
+A prod agent can ask a dev agent for implementation help. A dev agent can send status, context, or review notes back. The message appears inside the receiving agent's own active Pi session, so communication feels native to the agent workflow instead of external to it.
+
+PI//LINK does not create a hierarchy. There is no orchestrator and no parent/child chain. It is two Pi agents talking directly, with the user still in control of when either agent continues.
 
 ## Demo
 
 <p align="center">
-  <a href="./assets/demo.mp4">
+  <a href="https://drive.google.com/file/d/1iVPD2mTiJDlVJ11r9zQj3Ii7fCpuPRrk/view?usp=sharing">
     <img src="./assets/demo.png" alt="PI//LINK demo showing dev and prod agents communicating" width="920">
   </a>
 </p>
 
 <p align="center">
-  Two Pi agents communicating through PI//LINK. Click the screenshot to watch the full MP4 demo.
+  <a href="https://drive.google.com/file/d/1iVPD2mTiJDlVJ11r9zQj3Ii7fCpuPRrk/view?usp=sharing">Watch the full demo</a>
 </p>
 
 In this demo, the left terminal is the dev agent and the right terminal is the prod agent. The prod agent is prompted to say hi to the dev agent, PI//LINK sends the message through the local network, and the dev agent receives it as an inbound message injected into its own active Pi session.
-
-GitHub READMEs do not reliably inline MP4 playback across every context, so PI//LINK uses a static screenshot preview that links to the full MP4 demo.
-
-Later, the full MP4 can be hosted through GitHub Releases or a CDN so the README stays lightweight while still linking to high-quality video.
-
-## Why PI//LINK Exists
-
-Pi agents usually work in isolated sessions. That isolation is useful, but it makes coordination hard.
-
-PI//LINK adds a small message layer between agents. One agent can send context, review notes, or handoff instructions to another agent without merging their sessions.
-
-Messages arrive inside the receiving agent's own active Pi session. They are visible as context, but they do not automatically trigger a response. The user stays in control.
 
 ## How It Works
 
