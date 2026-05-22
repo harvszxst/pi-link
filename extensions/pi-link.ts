@@ -9,12 +9,18 @@ export default function piLink(pi: ExtensionAPI): void {
     try {
       const result = await connectPiLink(pi, ctx);
       ctx.ui.notify(
-        `PI//LINK connected as ${result.config.values.agentName}`,
+        [
+          "PI//LINK ready",
+          `Agent: ${result.config.values.agentName}`,
+          `Network: ${result.config.values.networkName}`,
+          `Mode: ${result.config.values.mode}`,
+          `Server: ${result.config.values.serverUrl}`,
+        ].join("\n"),
         "info",
       );
     } catch (error) {
       ctx.ui.notify(
-        `PI//LINK auto-connect failed: ${errorMessage(error)}\nRun /pilink setup or /pilink connect.`,
+        `PI//LINK auto-connect failed: ${errorMessage(error)}\nRun /pilink setup.`,
         "warning",
       );
     }
@@ -152,4 +158,3 @@ function formatJson(value: unknown): string {
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
-
