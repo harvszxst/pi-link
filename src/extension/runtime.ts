@@ -1,3 +1,11 @@
+/**
+ * PI//LINK — extension connection runtime
+ *
+ * Connects the current Pi process to the configured PI//LINK server, registers a
+ * fresh agent session, starts the SSE event loop, injects inbound messages, and
+ * surfaces host-offline notices. This module owns live communication only; setup
+ * preferences come from config and runtime connection state stays in memory.
+ */
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { AgentMessage } from "../types";
 import { PiLinkClient } from "./client";

@@ -1,3 +1,11 @@
+/**
+ * PI//LINK — Server-Sent Events fanout
+ *
+ * Tracks live SSE clients per agent and publishes runtime events such as inbound
+ * messages and host-offline notices. The server uses this module as the live
+ * delivery layer only; durable delivery remains in the in-memory message store,
+ * and missing live events can still be recovered through inbox reads.
+ */
 import type { AgentMessage, PiLinkEvent } from "./types";
 
 interface SseClient {

@@ -1,3 +1,11 @@
+/**
+ * PI//LINK — in-memory network, agent, and message store
+ *
+ * Owns all mutable server state for the current process. The store registers
+ * agents into one-time networks, keeps only one online agent per network/name,
+ * blocks member sends after a network host goes offline, and records messages
+ * until they are delivered through SSE injection or inbox reads.
+ */
 import { ERROR_CODES } from "./constants";
 import type {
   Agent,

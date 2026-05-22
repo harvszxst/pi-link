@@ -1,3 +1,11 @@
+/**
+ * PI//LINK — extension config resolution and persistence
+ *
+ * Loads user preferences from `~/.pi-link/config.json`, applies environment
+ * overrides, and falls back to local defaults. This module persists setup
+ * preferences only; runtime state such as agent IDs, sessions, SSE status, and
+ * managed process handles must remain in memory.
+ */
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";

@@ -1,3 +1,11 @@
+/**
+ * PI//LINK — HTTP API router
+ *
+ * Translates incoming HTTP requests into store operations and SSE responses for
+ * agent registration, discovery, heartbeats, messages, inbox delivery, and reply
+ * flow. It is also the boundary that maps domain errors to stable JSON responses
+ * and emits host-offline events when a host's live event stream closes.
+ */
 import { ERROR_CODES, SERVICE_NAME, VERSION } from "./constants";
 import { createEventStream, publishMessageCreated, publishToAgent } from "./events";
 import { StoreError, store } from "./store";

@@ -1,3 +1,12 @@
+/**
+ * PI//LINK — Pi extension entrypoint
+ *
+ * Registers the PI//LINK slash command set and tool bridge inside Pi. Startup is
+ * intentionally non-invasive: it only reports whether config exists and asks the
+ * user to run `/pilink setup`; it does not restore old sessions or auto-register
+ * an agent. Tool calls use the current runtime connection and stay scoped to the
+ * active one-time network.
+ */
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { registerPiLinkCommands } from "../src/extension/commands";

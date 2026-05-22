@@ -1,3 +1,11 @@
+/**
+ * PI//LINK — extension-only types
+ *
+ * Describes configuration, runtime state, command/client response wrappers, and
+ * event payloads used inside the Pi extension. These types sit above the shared
+ * server wire types and include client-only concepts such as managed server
+ * process handles and SSE AbortControllers.
+ */
 import type { ChildProcess } from "node:child_process";
 import type { Agent, AgentMessage, NetworkHostOfflineEvent } from "../types";
 

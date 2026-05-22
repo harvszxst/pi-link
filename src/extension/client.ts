@@ -1,3 +1,11 @@
+/**
+ * PI//LINK — extension HTTP client
+ *
+ * Wraps the local PI//LINK server API for the Pi extension runtime. It registers
+ * agents, scopes peer discovery to a network, sends and replies to messages,
+ * opens SSE streams, and normalizes JSON error responses into thrown errors for
+ * command/tool handlers.
+ */
 import type { Agent, AgentMessage } from "../types";
 import type { NetworkRole } from "../types";
 import type {

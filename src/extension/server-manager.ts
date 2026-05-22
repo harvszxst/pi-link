@@ -1,3 +1,10 @@
+/**
+ * PI//LINK — managed local server lifecycle
+ *
+ * Starts, stops, and reports status for the package-managed `pi-link-server`
+ * process used in local mode. LAN mode remains explicit and never spawns a local
+ * server; remote mode is reserved for a future hosted/Tailscale-backed flow.
+ */
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";

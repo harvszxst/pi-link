@@ -1,4 +1,12 @@
 #!/usr/bin/env node
+/**
+ * PI//LINK — packaged Node HTTP/SSE server
+ *
+ * Provides the npm-installable `pi-link-server` binary used by local mode when
+ * the extension needs to manage a server without Bun. It mirrors the TypeScript
+ * server API, keeps all state in memory, supports one-time networks, emits
+ * host-offline events over SSE, and blocks member sends after a host leaves.
+ */
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 

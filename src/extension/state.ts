@@ -1,3 +1,11 @@
+/**
+ * PI//LINK — extension runtime state
+ *
+ * Holds process-local connection state for the currently running Pi extension:
+ * session ID, active agent, selected network, SSE controller, and managed server
+ * process metadata. Nothing in this module should be persisted because closing
+ * Pi ends the current one-time runtime network session.
+ */
 import type { Agent } from "../types";
 import { DEFAULT_CONFIG } from "./config";
 import type { PiLinkConfig, PiLinkRuntimeState } from "./types";

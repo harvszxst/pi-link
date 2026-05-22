@@ -1,3 +1,11 @@
+/**
+ * PI//LINK — shared server utility helpers
+ *
+ * Provides small, dependency-free helpers used by the HTTP server, routes, and
+ * in-memory store. This file owns common JSON response formatting, stable ID and
+ * timestamp creation, and defensive request-body parsing primitives so route
+ * handlers can stay focused on protocol behavior.
+ */
 import type { ErrorCode, JsonError } from "./types";
 
 /**

@@ -1,3 +1,11 @@
+/**
+ * PI//LINK — shared wire and domain types
+ *
+ * Defines the API shapes exchanged between extension clients and the local
+ * server. These interfaces describe persisted-in-memory server entities, runtime
+ * event payloads, request inputs, and JSON error bodies; they deliberately avoid
+ * client-only runtime state such as active AbortControllers or managed processes.
+ */
 export type AgentStatus = "online" | "offline" | "stale";
 
 export type NetworkRole = "host" | "member";

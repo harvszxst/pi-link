@@ -1,3 +1,11 @@
+/**
+ * PI//LINK — slash command handlers
+ *
+ * Implements `/pilink` setup, status, peer discovery, send, inbox, auto-inject,
+ * server management, config, and doctor commands. Commands are the user-facing
+ * control surface for one-time networks: setup starts or joins the current
+ * runtime network, while sends are blocked when a joined network has no host.
+ */
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { Agent, AgentMessage } from "../types";
 import {

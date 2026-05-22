@@ -1,3 +1,11 @@
+/**
+ * PI//LINK — Bun HTTP/SSE server entrypoint
+ *
+ * Starts the development Bun server around the shared route handler. This server
+ * keeps all agent, message, and network state in memory, listens on the configured
+ * local host/port, and exposes the same JSON/SSE API mirrored by the packaged
+ * Node `pi-link-server` binary.
+ */
 import {
   DEFAULT_HOSTNAME,
   DEFAULT_PORT,
