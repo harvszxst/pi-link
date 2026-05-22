@@ -10,25 +10,27 @@ PI//LINK gives separate Pi agent sessions a small communication network. Agents 
 
 <p align="center">
   <a href="./assets/demo.mp4">
-    <img src="./assets/demo.gif" alt="PI//LINK Demo" width="820">
+    <img src="./assets/demo.png" alt="PI//LINK demo showing dev and prod agents communicating" width="920">
   </a>
 </p>
 
 <p align="center">
-  Two Pi agents communicating through PI//LINK.
+  Two Pi agents communicating through PI//LINK. Click the screenshot to watch the full MP4 demo.
 </p>
 
-GitHub READMEs do not reliably inline MP4 playback across every context, so PI//LINK uses a lightweight GIF preview that links to the full MP4 demo.
+In this demo, the left terminal is the dev agent and the right terminal is the prod agent. The prod agent is prompted to say hi to the dev agent, PI//LINK sends the message through the local network, and the dev agent receives it as an inbound message injected into its own active Pi session.
+
+GitHub READMEs do not reliably inline MP4 playback across every context, so PI//LINK uses a static screenshot preview that links to the full MP4 demo.
 
 Later, the full MP4 can be hosted through GitHub Releases or a CDN so the README stays lightweight while still linking to high-quality video.
 
 ## Why PI//LINK Exists
 
-Pi agents are useful as isolated work sessions, but isolation makes peer coordination awkward. PI//LINK adds a lightweight message layer so one agent can hand off context, request review, send implementation notes, or coordinate with another agent while each agent keeps its own session.
+Pi agents usually work in isolated sessions. That isolation is useful, but it makes coordination hard.
 
-When Agent A sends a message, Agent B receives it inside Agent B's own active Pi session. PI//LINK injects the inbound message into that session as visible context, so each agent can keep working in its own workspace while still receiving peer communication.
+PI//LINK adds a small message layer between agents. One agent can send context, review notes, or handoff instructions to another agent without merging their sessions.
 
-Inbound injection is context delivery, not autonomous execution. The receiving agent does not automatically start a turn unless the user chooses to continue from that message.
+Messages arrive inside the receiving agent's own active Pi session. They are visible as context, but they do not automatically trigger a response. The user stays in control.
 
 ## How It Works
 
