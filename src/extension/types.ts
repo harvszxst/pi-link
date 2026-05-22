@@ -1,7 +1,9 @@
 import type { ChildProcess } from "node:child_process";
 import type { Agent, AgentMessage } from "../types";
 
-export type PiLinkMode = "local" | "lan";
+export type PiLinkMode = "local" | "lan" | "remote";
+
+export type PiLinkNetworkAction = "create" | "join";
 
 export type ConfigSource = "env" | "config" | "default";
 
@@ -11,6 +13,8 @@ export interface PiLinkConfig {
   agentRole?: string;
   autoInject: boolean;
   mode: PiLinkMode;
+  networkAction: PiLinkNetworkAction;
+  networkName: string;
 }
 
 export type PiLinkConfigSources = Record<keyof PiLinkConfig, ConfigSource>;
@@ -28,6 +32,8 @@ export interface PiLinkRuntimeState {
   agentRole: string | undefined;
   serverUrl: string | undefined;
   mode: PiLinkMode;
+  networkAction: PiLinkNetworkAction;
+  networkName: string;
   connected: boolean;
   autoInject: boolean;
   sseConnected: boolean;

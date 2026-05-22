@@ -6,6 +6,7 @@ import type {
   PiLinkConfig,
   PiLinkConfigSources,
   PiLinkMode,
+  PiLinkNetworkAction,
   ResolvedPiLinkConfig,
 } from "./types";
 
@@ -17,6 +18,8 @@ export const DEFAULT_CONFIG: PiLinkConfig = {
   agentRole: "assistant",
   autoInject: true,
   mode: "local",
+  networkAction: "create",
+  networkName: "default",
 };
 
 type PartialConfig = Partial<PiLinkConfig>;
@@ -111,8 +114,16 @@ function parseConfig(value: unknown): PartialConfig {
     config.autoInject = record.autoInject;
   }
 
-  if (record.mode === "local" || record.mode === "lan") {
+  if (isPiLinkMode(record.mode)) {
     config.mode = record.mode;
+  }
+
+  if (isPiLinkNetworkAction(record.networkAction)) {
+    config.networkAction = record.networkAction;
+  }
+
+  if (typeof record.networkName === "string" && record.networkName.trim()) {
+    config.networkName = record.networkName.trim();
   }
 
   return config;
@@ -168,7 +179,17 @@ function createDefaultSources(): PiLinkConfigSources {
     agentRole: "default",
     autoInject: "default",
     mode: "default",
+    networkAction: "default",
+    networkName: "default",
   };
+}
+
+function isPiLinkMode(value: unknown): value is PiLinkMode {
+  return value === "local" || value === "lan" || value === "remote";
+}
+
+function isPiLinkNetworkAction(value: unknown): value is PiLinkNetworkAction {
+  return value === "create" || value === "join";
 }
 
 function readStringEnv(name: string): string | undefined {

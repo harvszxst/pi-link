@@ -303,6 +303,7 @@ export function formatConnectedSummary(config: PiLinkConfig): string {
     `Agent: ${runtimeState.agentName ?? "unknown"}`,
     `Role: ${runtimeState.agentRole ?? "none"}`,
     `Server: ${config.serverUrl}`,
+    `Network: ${config.networkName}`,
     `Auto Inject: ${config.autoInject ? "enabled" : "disabled"}`,
   ].join("\n");
 }

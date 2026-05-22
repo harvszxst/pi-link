@@ -23,12 +23,11 @@ import {
   stopManagedServer,
 } from "./server-manager";
 import type { ServerStatus } from "./server-manager";
-import type { PiLinkConfig, PiLinkMode } from "./types";
+import type { PiLinkConfig, PiLinkMode, PiLinkNetworkAction } from "./types";
 
 const HELP_TEXT = [
   "PI//LINK commands:",
   "/pilink setup",
-  "/pilink connect",
   "/pilink disconnect",
   "/pilink status",
   "/pilink agents",
@@ -52,7 +51,6 @@ export function registerPiLinkCommands(pi: ExtensionAPI): void {
     getArgumentCompletions(prefix: string) {
       const commands = [
         "setup",
-        "connect",
         "disconnect",
         "status",
         "agents",
@@ -88,10 +86,7 @@ async function handlePiLinkCommand(
   try {
     switch (command) {
       case "setup":
-        await setupCommand(ctx);
-        return;
-      case "connect":
-        await connectCommand(pi, ctx);
+        await setupCommand(pi, ctx);
         return;
       case "disconnect":
         disconnectCommand(ctx);
@@ -129,9 +124,50 @@ async function handlePiLinkCommand(
   }
 }
 
-async function setupCommand(ctx: ExtensionContext): Promise<void> {
+async function setupCommand(
+  pi: ExtensionAPI,
+  ctx: ExtensionContext,
+): Promise<void> {
   const resolved = await resolveConfig();
   const current = resolved.values;
+
+  const mode = await promptMode(ctx, current.mode);
+  if (mode === undefined) {
+    return;
+  }
+
+  if (mode === "remote") {
+    ctx.ui.notify(
+      "Remote mode is coming soon. This will set up a hosted PI//LINK server and share it over Tailscale in a future release.",
+      "info",
+    );
+    return;
+  }
+
+  let serverUrl = current.serverUrl;
+  if (mode === "local") {
+    serverUrl = "http://127.0.0.1:3007";
+  } else {
+    ctx.ui.notify(
+      "LAN mode is intended only for trusted local networks.\nDo not expose PI//LINK to the public internet.",
+      "warning",
+    );
+    const lanServerUrl = await promptText(ctx, "Server URL", current.serverUrl);
+    if (lanServerUrl === undefined) {
+      return;
+    }
+    serverUrl = lanServerUrl;
+  }
+
+  const networkAction = await promptNetworkAction(ctx, current.networkAction);
+  if (networkAction === undefined) {
+    return;
+  }
+
+  const networkName = await promptText(ctx, "Network name", current.networkName);
+  if (networkName === undefined) {
+    return;
+  }
 
   const agentName = await promptText(ctx, "Agent name", current.agentName);
   if (agentName === undefined) {
@@ -143,11 +179,6 @@ async function setupCommand(ctx: ExtensionContext): Promise<void> {
     return;
   }
 
-  const serverUrl = await promptText(ctx, "Server URL", current.serverUrl);
-  if (serverUrl === undefined) {
-    return;
-  }
-
   const autoInjectChoice = await ctx.ui.select(
     "Auto inject?",
     current.autoInject ? ["yes", "no"] : ["no", "yes"],
@@ -156,27 +187,13 @@ async function setupCommand(ctx: ExtensionContext): Promise<void> {
     return;
   }
 
-  const modeChoice = await ctx.ui.select(
-    "Mode?",
-    current.mode === "local" ? ["local", "lan"] : ["lan", "local"],
-  );
-  if (modeChoice === undefined) {
-    return;
-  }
-
-  const mode = modeChoice as PiLinkMode;
-  if (mode === "lan") {
-    ctx.ui.notify(
-      "LAN mode is intended only for trusted local networks.\nDo not expose PI//LINK to the public internet.",
-      "warning",
-    );
-  }
-
   const config: PiLinkConfig = {
     serverUrl,
     agentName,
     autoInject: autoInjectChoice === "yes",
     mode,
+    networkAction,
+    networkName,
   };
 
   if (agentRole.trim().length > 0) {
@@ -185,15 +202,15 @@ async function setupCommand(ctx: ExtensionContext): Promise<void> {
 
   await saveConfig(config);
   applyRuntimeConfig(config);
-  ctx.ui.notify(`PI//LINK config saved:\n${CONFIG_PATH}`, "info");
-}
-
-async function connectCommand(
-  pi: ExtensionAPI,
-  ctx: ExtensionContext,
-): Promise<void> {
   const result = await connectPiLink(pi, ctx);
-  ctx.ui.notify(formatConnectedSummary(result.config.values), "info");
+  ctx.ui.notify(
+    [
+      `PI//LINK config saved:\n${CONFIG_PATH}`,
+      "",
+      formatConnectedSummary(result.config.values),
+    ].join("\n"),
+    "info",
+  );
 }
 
 function disconnectCommand(ctx: ExtensionContext): void {
@@ -210,6 +227,8 @@ function statusCommand(ctx: ExtensionContext): void {
       `Agent Role: ${runtimeState.agentRole ?? "none"}`,
       `Server URL: ${runtimeState.serverUrl ?? "none"}`,
       `Mode: ${runtimeState.mode}`,
+      `Network: ${runtimeState.networkName}`,
+      `Network Action: ${runtimeState.networkAction}`,
       `Auto Inject: ${runtimeState.autoInject ? "enabled" : "disabled"}`,
       `SSE: ${runtimeState.sseConnected ? "connected" : "disconnected"}`,
       `Heartbeat: ${runtimeState.heartbeatRunning ? "running" : "stopped"}`,
@@ -333,6 +352,8 @@ async function configCommand(ctx: ExtensionContext): Promise<void> {
       `agentRole: ${values.agentRole ?? "none"} ${sources.agentRole}`,
       `autoInject: ${String(values.autoInject)} ${sources.autoInject}`,
       `mode: ${values.mode} ${sources.mode}`,
+      `networkAction: ${values.networkAction} ${sources.networkAction}`,
+      `networkName: ${values.networkName} ${sources.networkName}`,
       `path: ${CONFIG_PATH}`,
     ].join("\n"),
     "info",
@@ -350,6 +371,8 @@ async function doctorCommand(ctx: ExtensionContext): Promise<void> {
       "",
       `Config: ${config.configExists ? "OK" : "missing"}`,
       `Mode: ${config.values.mode}`,
+      `Network: ${config.values.networkName}`,
+      `Network Action: ${config.values.networkAction}`,
       `Server: ${serverOk ? "OK" : "unreachable"}`,
       `Server Managed: ${serverStatus.managed ? "yes" : "no"}`,
       `Local Process: ${serverStatus.running ? "running" : "stopped"}`,
@@ -364,6 +387,40 @@ async function doctorCommand(ctx: ExtensionContext): Promise<void> {
   );
 }
 
+async function promptMode(
+  ctx: ExtensionContext,
+  current: PiLinkMode,
+): Promise<PiLinkMode | undefined> {
+  const choices = orderChoices(current, ["local", "lan", "remote"]);
+  const selected = await ctx.ui.select("Mode?", choices);
+  return selected as PiLinkMode | undefined;
+}
+
+async function promptNetworkAction(
+  ctx: ExtensionContext,
+  current: PiLinkNetworkAction,
+): Promise<PiLinkNetworkAction | undefined> {
+  const labels: Record<PiLinkNetworkAction, string> = {
+    create: "create network",
+    join: "join network",
+  };
+  const choices = orderChoices(labels[current], [
+    labels.create,
+    labels.join,
+  ]);
+  const selected = await ctx.ui.select("Network?", choices);
+
+  if (selected === labels.create) {
+    return "create";
+  }
+
+  if (selected === labels.join) {
+    return "join";
+  }
+
+  return undefined;
+}
+
 async function promptText(
   ctx: ExtensionContext,
   label: string,
@@ -376,6 +433,13 @@ async function promptText(
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : current;
+}
+
+function orderChoices<T extends string>(current: T, choices: T[]): T[] {
+  return [
+    current,
+    ...choices.filter((choice) => choice !== current),
+  ];
 }
 
 function formatAgents(agents: Agent[]): string {

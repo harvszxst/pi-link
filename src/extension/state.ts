@@ -11,6 +11,8 @@ export const runtimeState: PiLinkRuntimeState = {
   connected: false,
   autoInject: DEFAULT_CONFIG.autoInject,
   mode: DEFAULT_CONFIG.mode,
+  networkAction: DEFAULT_CONFIG.networkAction,
+  networkName: DEFAULT_CONFIG.networkName,
   sseConnected: false,
   heartbeatRunning: false,
   eventAbortController: undefined,
@@ -28,6 +30,8 @@ export function markConnected(agent: Agent, config: PiLinkConfig): void {
   runtimeState.agentRole = agent.role;
   runtimeState.serverUrl = config.serverUrl;
   runtimeState.mode = config.mode;
+  runtimeState.networkAction = config.networkAction;
+  runtimeState.networkName = config.networkName;
   runtimeState.connected = true;
   runtimeState.autoInject = config.autoInject;
 }
@@ -51,7 +55,7 @@ export function markDisconnected(): void {
  */
 export function requireCurrentAgentId(): string {
   if (runtimeState.agentId === undefined) {
-    throw new Error("PI//LINK is not connected. Run /pilink connect first.");
+    throw new Error("PI//LINK is not connected. Run /pilink setup first.");
   }
 
   return runtimeState.agentId;
@@ -63,5 +67,7 @@ export function requireCurrentAgentId(): string {
 export function applyRuntimeConfig(config: PiLinkConfig): void {
   runtimeState.serverUrl = config.serverUrl;
   runtimeState.mode = config.mode;
+  runtimeState.networkAction = config.networkAction;
+  runtimeState.networkName = config.networkName;
   runtimeState.autoInject = config.autoInject;
 }
