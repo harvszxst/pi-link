@@ -8,21 +8,35 @@ PI//LINK gives separate Pi agent sessions a small communication network. Agents 
 
 ## Demo
 
-Two Pi agents sending and receiving messages through PI//LINK:
+<p align="center">
+  <a href="./assets/demo.mp4">
+    <img src="./assets/demo.gif" alt="PI//LINK Demo" width="820">
+  </a>
+</p>
 
-[Watch the demo](docs/assets/pi-link-demo1.mp4)
+<p align="center">
+  Two Pi agents communicating through PI//LINK.
+</p>
+
+GitHub READMEs do not reliably inline MP4 playback across every context, so PI//LINK uses a lightweight GIF preview that links to the full MP4 demo.
+
+Later, the full MP4 can be hosted through GitHub Releases or a CDN so the README stays lightweight while still linking to high-quality video.
 
 ## Why PI//LINK Exists
 
 Pi agents are useful as isolated work sessions, but isolation makes peer coordination awkward. PI//LINK adds a lightweight message layer so one agent can hand off context, request review, send implementation notes, or coordinate with another agent while each agent keeps its own session.
 
-Inbound messages can be injected into the active Pi session, but they do not automatically trigger a Pi turn. The user stays in control of when an agent responds.
+When Agent A sends a message, Agent B receives it inside Agent B's own active Pi session. PI//LINK injects the inbound message into that session as visible context, so each agent can keep working in its own workspace while still receiving peer communication.
+
+Inbound injection is context delivery, not autonomous execution. The receiving agent does not automatically start a turn unless the user chooses to continue from that message.
 
 ## How It Works
 
 ```txt
 Pi Agent A <-> PI//LINK Server <-> Pi Agent B
 ```
+
+> Architecture image placeholder: local/LAN Pi agents connected through the PI//LINK HTTP/SSE server.
 
 Agents register with a PI//LINK server, discover peers in the same network, and send messages over HTTP. Live delivery uses Server-Sent Events, so receiving agents can see inbound messages as they arrive.
 
@@ -66,6 +80,8 @@ Inside Pi, run:
 /pilink agents
 /pilink send
 ```
+
+> Terminal screenshot placeholder: `/pilink setup`, `/pilink agents`, and `/pilink send` flow.
 
 For the first agent, choose `local` mode and `create network`. For the second agent, choose `local` mode and `join network` with the same network name.
 
