@@ -45,7 +45,7 @@ PI_LINK_HOST=127.0.0.1
 PI_LINK_PORT=3007
 ```
 
-Installed packages also expose a `pi-link-server` bin. In `local` mode, the Pi extension can start this server automatically when `/pilink connect` runs and no configured server is reachable. In `lan` mode, the extension never auto-starts a local server and only connects to the configured URL.
+Installed packages also expose a `pi-link-server` bin. In `local` mode, `/pilink setup` can start this server automatically when no configured server is reachable. In `lan` mode, setup never auto-starts a local server and only connects to the configured URL. `remote` mode is reserved for future Tailscale-backed setup.
 
 ## Running Pi Agents
 
@@ -83,7 +83,6 @@ Then inside Pi:
 
 ```txt
 /pilink setup
-/pilink connect
 /pilink agents
 /pilink send
 ```
@@ -107,7 +106,6 @@ Inbound messages are injected into the active Pi session by default, but they do
 The extension registers `/pilink` with these subcommands:
 
 - `/pilink setup`
-- `/pilink connect`
 - `/pilink disconnect`
 - `/pilink status`
 - `/pilink agents`
@@ -136,18 +134,17 @@ The extension registers `/pilink` with these subcommands:
 ## Example Workflow
 
 1. Start a `prod` Pi agent with the extension.
-2. Run `/pilink setup` if needed.
-3. Run `/pilink connect`; in local mode this starts the server if needed.
-4. Start and connect a `dev` Pi agent with the extension.
-5. Ask `dev` to list agents.
-6. Ask `dev` to send a message to `prod`.
-7. `prod` receives an injected PI//LINK message in-session.
-8. Ask `prod` to reply.
-9. `dev` receives an injected PI//LINK message in-session.
+2. Run `/pilink setup`; in local mode this starts the server if needed and connects the agent.
+3. Start a `dev` Pi agent and run `/pilink setup` with the same local network name.
+4. Ask `dev` to list agents.
+5. Ask `dev` to send a message to `prod`.
+6. `prod` receives an injected PI//LINK message in-session.
+7. Ask `prod` to reply.
+8. `dev` receives an injected PI//LINK message in-session.
 
 ## Learning Docs
 
-Read [Core Functionality](docs/core-functionality.md) for a walkthrough of the important code paths and snippets.
+Read [Core Functionality](docs/core-functionality.md) for the under-the-hood guide index with focused code path walkthroughs and snippets.
 
 ## Current Limitations
 
