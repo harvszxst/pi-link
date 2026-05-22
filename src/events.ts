@@ -13,7 +13,11 @@ const clientsByAgentId = new Map<string, Map<string, SseClient>>();
 /**
  * Opens an SSE stream for one agent and registers it for future event fanout.
  */
-export function createEventStream(agentId: string, signal: AbortSignal): Response {
+export function createEventStream(
+  agentId: string,
+  signal: AbortSignal,
+  onClose?: (agentId: string) => void,
+): Response {
   const clientId = crypto.randomUUID();
 
   const stream = new ReadableStream<Uint8Array>({
@@ -33,11 +37,15 @@ export function createEventStream(agentId: string, signal: AbortSignal): Respons
 
       addClient(client);
       sendRaw(controller, "event: connected\ndata: {}\n\n");
-      signal.addEventListener("abort", () => removeClient(client), { once: true });
+      signal.addEventListener(
+        "abort",
+        () => removeClient(client, onClose),
+        { once: true },
+      );
       console.log(`[pi-link] sse connected agent=${agentId} client=${clientId}`);
     },
     cancel() {
-      removeClientById(agentId, clientId);
+      removeClientById(agentId, clientId, onClose);
     },
   });
 
@@ -86,14 +94,18 @@ function addClient(client: SseClient): void {
   clientsByAgentId.set(client.agentId, clients);
 }
 
-function removeClientById(agentId: string, clientId: string): void {
+function removeClientById(
+  agentId: string,
+  clientId: string,
+  onClose?: (agentId: string) => void,
+): void {
   const client = clientsByAgentId.get(agentId)?.get(clientId);
   if (client !== undefined) {
-    removeClient(client);
+    removeClient(client, onClose);
   }
 }
 
-function removeClient(client: SseClient): void {
+function removeClient(client: SseClient, onClose?: (agentId: string) => void): void {
   clearInterval(client.keepAlive);
 
   const clients = clientsByAgentId.get(client.agentId);
@@ -104,6 +116,7 @@ function removeClient(client: SseClient): void {
   clients.delete(client.id);
   if (clients.size === 0) {
     clientsByAgentId.delete(client.agentId);
+    onClose?.(client.agentId);
   }
 
   console.log(`[pi-link] sse disconnected agent=${client.agentId} client=${client.id}`);

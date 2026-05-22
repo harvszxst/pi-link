@@ -1,4 +1,5 @@
 import type { Agent, AgentMessage } from "../types";
+import type { NetworkRole } from "../types";
 import type {
   AgentListResponse,
   AgentResponse,
@@ -8,6 +9,8 @@ import type {
 
 export interface RegisterAgentInput {
   name: string;
+  networkName: string;
+  networkRole: NetworkRole;
   role?: string;
   sessionId: string;
 }
@@ -41,6 +44,8 @@ export class PiLinkClient {
       method: "POST",
       body: {
         name: input.name,
+        networkName: input.networkName,
+        networkRole: input.networkRole,
         role: input.role,
         sessionId: input.sessionId,
       },
@@ -52,11 +57,19 @@ export class PiLinkClient {
   /**
    * Lists online agents, optionally excluding the current agent.
    */
-  async listAgents(excludeAgentId?: string): Promise<Agent[]> {
-    const query =
-      excludeAgentId === undefined
-        ? ""
-        : `?exclude=${encodeURIComponent(excludeAgentId)}`;
+  async listAgents(
+    excludeAgentId?: string,
+    networkName?: string,
+  ): Promise<Agent[]> {
+    const params = new URLSearchParams();
+    if (excludeAgentId !== undefined) {
+      params.set("exclude", excludeAgentId);
+    }
+    if (networkName !== undefined) {
+      params.set("network", networkName);
+    }
+
+    const query = params.size > 0 ? `?${params.toString()}` : "";
     const response = await this.requestJson<AgentListResponse>(`/agents${query}`);
     return response.agents;
   }

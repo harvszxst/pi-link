@@ -10,8 +10,8 @@ import {
 } from "./state";
 import { ensureLocalServer } from "./server-manager";
 import type {
-  MessageCreatedEvent,
   PiLinkConfig,
+  PiLinkRuntimeEvent,
   ResolvedPiLinkConfig,
 } from "./types";
 
@@ -34,10 +34,14 @@ export async function connectPiLink(
   const client = new PiLinkClient(config.values.serverUrl);
   const input: {
     name: string;
+    networkName: string;
+    networkRole: "host" | "member";
     role?: string;
     sessionId: string;
   } = {
     name: config.values.agentName,
+    networkName: config.values.networkName,
+    networkRole: config.values.networkAction === "create" ? "host" : "member",
     sessionId: runtimeState.sessionId,
   };
 
@@ -180,12 +184,21 @@ async function handleEventFrame(
   ctx: ExtensionContext,
 ): Promise<void> {
   const parsed = parseEventFrame(frame);
-  if (parsed === null || parsed.event !== "message.created") {
+  if (parsed === null) {
     return;
   }
 
-  const event = parseMessageCreatedEvent(parsed.data);
+  const event = parseRuntimeEvent(parsed.data);
   if (event === null) {
+    return;
+  }
+
+  if (event.type === "network.host.offline") {
+    ctx.ui.notify(formatHostOfflineNotice(event), "warning");
+    return;
+  }
+
+  if (event.type !== "message.created") {
     return;
   }
 
@@ -235,7 +248,7 @@ function parseEventFrame(frame: string): { event: string; data: string } | null 
 /**
  * Safely decodes PI//LINK message event JSON.
  */
-function parseMessageCreatedEvent(data: string): MessageCreatedEvent | null {
+function parseRuntimeEvent(data: string): PiLinkRuntimeEvent | null {
   let value: unknown;
 
   try {
@@ -248,8 +261,15 @@ function parseMessageCreatedEvent(data: string): MessageCreatedEvent | null {
     return null;
   }
 
-  const event = value as MessageCreatedEvent;
-  return event.type === "message.created" ? event : null;
+  const event = value as PiLinkRuntimeEvent;
+  if (
+    event.type === "message.created" ||
+    event.type === "network.host.offline"
+  ) {
+    return event;
+  }
+
+  return null;
 }
 
 /**
@@ -305,6 +325,20 @@ export function formatConnectedSummary(config: PiLinkConfig): string {
     `Server: ${config.serverUrl}`,
     `Network: ${config.networkName}`,
     `Auto Inject: ${config.autoInject ? "enabled" : "disabled"}`,
+  ].join("\n");
+}
+
+function formatHostOfflineNotice(event: {
+  networkName: string;
+  hostName: string;
+}): string {
+  return [
+    "PI//LINK network host is offline.",
+    `Network: ${event.networkName}`,
+    `Host: ${event.hostName}`,
+    "",
+    "This network is no longer available.",
+    "Run /pilink setup to start or join a new PI//LINK network.",
   ].join("\n");
 }
 

@@ -1,28 +1,25 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { registerPiLinkCommands } from "../src/extension/commands";
-import { createRuntimeClient, connectPiLink } from "../src/extension/runtime";
-import { requireCurrentAgentId } from "../src/extension/state";
+import { resolveConfig } from "../src/extension/config";
+import { createRuntimeClient } from "../src/extension/runtime";
+import { requireCurrentAgentId, runtimeState } from "../src/extension/state";
 
 export default function piLink(pi: ExtensionAPI): void {
   pi.on("session_start", async (_event, ctx) => {
     try {
-      const result = await connectPiLink(pi, ctx);
+      const config = await resolveConfig();
+      if (!config.configExists) {
+        ctx.ui.notify("PI//LINK not configured.\nRun /pilink setup.", "info");
+        return;
+      }
+
       ctx.ui.notify(
-        [
-          "PI//LINK ready",
-          `Agent: ${result.config.values.agentName}`,
-          `Network: ${result.config.values.networkName}`,
-          `Mode: ${result.config.values.mode}`,
-          `Server: ${result.config.values.serverUrl}`,
-        ].join("\n"),
+        "PI//LINK config detected.\nRun /pilink setup to start or join a network.",
         "info",
       );
     } catch (error) {
-      ctx.ui.notify(
-        `PI//LINK auto-connect failed: ${errorMessage(error)}\nRun /pilink setup.`,
-        "warning",
-      );
+      ctx.ui.notify(`PI//LINK startup check failed.\n${errorMessage(error)}`, "warning");
     }
   });
 
@@ -38,7 +35,10 @@ function registerPiLinkTools(pi: ExtensionAPI): void {
     parameters: Type.Object({}),
     async execute() {
       const client = createRuntimeClient();
-      const agents = await client.listAgents(requireCurrentAgentId());
+      const agents = await client.listAgents(
+        requireCurrentAgentId(),
+        runtimeState.networkName,
+      );
       return toolResult(formatJson(agents), { agents });
     },
   });

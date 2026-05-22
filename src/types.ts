@@ -1,9 +1,13 @@
 export type AgentStatus = "online" | "offline" | "stale";
 
+export type NetworkRole = "host" | "member";
+
 export interface Agent {
   id: string;
   name: string;
   role?: string;
+  networkName: string;
+  networkRole: NetworkRole;
   sessionId: string;
   status: AgentStatus;
   createdAt: string;
@@ -29,11 +33,20 @@ export interface MessageCreatedEvent {
   message: AgentMessage;
 }
 
-export type PiLinkEvent = MessageCreatedEvent;
+export interface NetworkHostOfflineEvent {
+  type: "network.host.offline";
+  networkName: string;
+  hostAgentId: string;
+  hostName: string;
+}
+
+export type PiLinkEvent = MessageCreatedEvent | NetworkHostOfflineEvent;
 
 export interface RegisterAgentInput {
   name: string;
   role?: string;
+  networkName: string;
+  networkRole: NetworkRole;
   sessionId: string;
 }
 
@@ -52,7 +65,9 @@ export interface ReplyToMessageInput {
 export type ErrorCode =
   | "INVALID_REQUEST"
   | "AGENT_NOT_FOUND"
+  | "HOST_OFFLINE"
   | "MESSAGE_NOT_FOUND"
+  | "NETWORK_MISMATCH"
   | "SERVER_ERROR";
 
 export interface JsonError {

@@ -4,6 +4,7 @@ import type {
   AgentMessage,
   CreateMessageInput,
   ErrorCode,
+  NetworkHostOfflineEvent,
   RegisterAgentInput,
   ReplyToMessageInput,
 } from "./types";
@@ -37,6 +38,8 @@ export class PiLinkStore {
         const updated: Agent = {
           ...existing,
           name: input.name,
+          networkName: input.networkName,
+          networkRole: input.networkRole,
           status: "online",
           lastSeenAt: now,
         };
@@ -48,13 +51,18 @@ export class PiLinkStore {
         }
 
         this.agentsById.set(updated.id, updated);
+        this.markDuplicateAgentsOffline(input, updated.id);
         return updated;
       }
     }
 
+    this.markDuplicateAgentsOffline(input);
+
     const agent: Agent = {
       id: createId("agent"),
       name: input.name,
+      networkName: input.networkName,
+      networkRole: input.networkRole,
       sessionId: input.sessionId,
       status: "online",
       createdAt: now,
@@ -74,9 +82,13 @@ export class PiLinkStore {
   /**
    * Returns online agents, optionally hiding the caller from peer discovery.
    */
-  listAgents(excludeAgentId?: string): Agent[] {
+  listAgents(excludeAgentId?: string, networkName?: string): Agent[] {
     return Array.from(this.agentsById.values()).filter((agent) => {
-      return agent.status === "online" && agent.id !== excludeAgentId;
+      return (
+        agent.status === "online" &&
+        agent.id !== excludeAgentId &&
+        (networkName === undefined || agent.networkName === networkName)
+      );
     });
   }
 
@@ -93,6 +105,8 @@ export class PiLinkStore {
   createMessage(input: CreateMessageInput): AgentMessage {
     this.assertAgentExists(input.fromAgentId, "Sender agent does not exist.");
     this.assertAgentExists(input.toAgentId, "Target agent does not exist.");
+    this.assertSameNetwork(input.fromAgentId, input.toAgentId);
+    this.assertNetworkHostOnline(input.fromAgentId);
 
     const message: AgentMessage = {
       id: createId("msg"),
@@ -205,11 +219,129 @@ export class PiLinkStore {
   }
 
   /**
+   * Marks an agent offline and returns a host-offline event when applicable.
+   */
+  markAgentOffline(agentId: string): {
+    event: NetworkHostOfflineEvent;
+    recipientAgentIds: string[];
+  } | null {
+    const agent = this.agentsById.get(agentId);
+    if (agent === undefined || agent.status === "offline") {
+      return null;
+    }
+
+    const offline: Agent = {
+      ...agent,
+      status: "offline",
+      lastSeenAt: nowIso(),
+    };
+    this.agentsById.set(agentId, offline);
+
+    if (offline.networkRole !== "host") {
+      return null;
+    }
+
+    const recipientAgentIds = Array.from(this.agentsById.values())
+      .filter((candidate) => {
+        return (
+          candidate.networkName === offline.networkName &&
+          candidate.networkRole === "member" &&
+          candidate.status === "online"
+        );
+      })
+      .map((candidate) => candidate.id);
+
+    return {
+      event: {
+        type: "network.host.offline",
+        networkName: offline.networkName,
+        hostAgentId: offline.id,
+        hostName: offline.name,
+      },
+      recipientAgentIds,
+    };
+  }
+
+  /**
    * Raises a stable domain error when a route references an unknown agent.
    */
   private assertAgentExists(agentId: string, message: string): void {
     if (!this.agentsById.has(agentId)) {
       throw new StoreError(ERROR_CODES.agentNotFound, message);
+    }
+  }
+
+  /**
+   * Blocks member sends when no host for their network is online.
+   */
+  private assertNetworkHostOnline(senderAgentId: string): void {
+    const sender = this.agentsById.get(senderAgentId);
+    if (sender === undefined || sender.networkRole === "host") {
+      return;
+    }
+
+    const hostOnline = Array.from(this.agentsById.values()).some((agent) => {
+      return (
+        agent.networkName === sender.networkName &&
+        agent.networkRole === "host" &&
+        agent.status === "online"
+      );
+    });
+
+    if (!hostOnline) {
+      throw new StoreError(
+        ERROR_CODES.hostOffline,
+        "Network host is offline. This network is no longer available.",
+      );
+    }
+  }
+
+  /**
+   * Blocks direct sends across different networks.
+   */
+  private assertSameNetwork(fromAgentId: string, toAgentId: string): void {
+    const fromAgent = this.agentsById.get(fromAgentId);
+    const toAgent = this.agentsById.get(toAgentId);
+
+    if (
+      fromAgent === undefined ||
+      toAgent === undefined ||
+      fromAgent.networkName === toAgent.networkName
+    ) {
+      return;
+    }
+
+    throw new StoreError(
+      ERROR_CODES.networkMismatch,
+      "Target agent is not in the current network.",
+    );
+  }
+
+  /**
+   * Keeps one online agent per network/name logical identity.
+   */
+  private markDuplicateAgentsOffline(
+    input: RegisterAgentInput,
+    excludeAgentId?: string,
+  ): void {
+    const now = nowIso();
+
+    for (const agent of this.agentsById.values()) {
+      if (
+        agent.id === excludeAgentId ||
+        agent.networkName !== input.networkName ||
+        agent.name !== input.name ||
+        agent.status === "offline"
+      ) {
+        continue;
+      }
+
+      const offline: Agent = {
+        ...agent,
+        status: "offline",
+        lastSeenAt: now,
+      };
+      this.agentsById.set(agent.id, offline);
     }
   }
 }

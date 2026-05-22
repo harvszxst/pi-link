@@ -6,6 +6,8 @@ export const DEFAULT_PORT = 3007;
 export const ERROR_CODES = {
   invalidRequest: "INVALID_REQUEST",
   agentNotFound: "AGENT_NOT_FOUND",
+  hostOffline: "HOST_OFFLINE",
   messageNotFound: "MESSAGE_NOT_FOUND",
+  networkMismatch: "NETWORK_MISMATCH",
   serverError: "SERVER_ERROR",
 } as const;

@@ -1,5 +1,5 @@
 import type { ChildProcess } from "node:child_process";
-import type { Agent, AgentMessage } from "../types";
+import type { Agent, AgentMessage, NetworkHostOfflineEvent } from "../types";
 
 export type PiLinkMode = "local" | "lan" | "remote";
 
@@ -48,6 +48,8 @@ export interface MessageCreatedEvent {
   type: "message.created";
   message: AgentMessage;
 }
+
+export type PiLinkRuntimeEvent = MessageCreatedEvent | NetworkHostOfflineEvent;
 
 export interface AgentListResponse {
   agents: Agent[];

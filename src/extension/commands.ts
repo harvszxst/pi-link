@@ -239,7 +239,10 @@ function statusCommand(ctx: ExtensionContext): void {
 
 async function agentsCommand(ctx: ExtensionContext): Promise<void> {
   const client = createRuntimeClient();
-  const agents = await client.listAgents(requireCurrentAgentId());
+  const agents = await client.listAgents(
+    requireCurrentAgentId(),
+    runtimeState.networkName,
+  );
 
   ctx.ui.notify(formatAgents(agents), "info");
 }
@@ -247,7 +250,14 @@ async function agentsCommand(ctx: ExtensionContext): Promise<void> {
 async function sendCommand(ctx: ExtensionContext): Promise<void> {
   const client = createRuntimeClient();
   const fromAgentId = requireCurrentAgentId();
-  const agents = await client.listAgents(fromAgentId);
+  const agents = await client.listAgents(fromAgentId, runtimeState.networkName);
+  if (
+    runtimeState.networkAction === "join" &&
+    !agents.some((agent) => agent.networkRole === "host")
+  ) {
+    ctx.ui.notify(formatHostOfflineNotice(), "warning");
+    return;
+  }
 
   if (agents.length === 0) {
     ctx.ui.notify("No connected PI//LINK peers found.", "warning");
@@ -458,6 +468,16 @@ function formatAgents(agents: Agent[]): string {
         `   Status: ${agent.status}`,
       ].join("\n"),
     ),
+  ].join("\n");
+}
+
+function formatHostOfflineNotice(): string {
+  return [
+    "Cannot send message.",
+    "Network host is offline.",
+    "This network is no longer available.",
+    "",
+    "Run /pilink setup to start or join a new PI//LINK network.",
   ].join("\n");
 }
 

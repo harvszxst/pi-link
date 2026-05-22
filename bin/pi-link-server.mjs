@@ -10,7 +10,9 @@ const DEFAULT_PORT = 3007;
 const ERROR_CODES = {
   invalidRequest: "INVALID_REQUEST",
   agentNotFound: "AGENT_NOT_FOUND",
+  hostOffline: "HOST_OFFLINE",
   messageNotFound: "MESSAGE_NOT_FOUND",
+  networkMismatch: "NETWORK_MISMATCH",
   serverError: "SERVER_ERROR",
 };
 
@@ -67,7 +69,8 @@ async function routeRequest(request) {
 
   if (request.method === "GET" && url.pathname === "/agents") {
     const excludeAgentId = url.searchParams.get("exclude") ?? undefined;
-    return jsonResponse({ agents: listAgents(excludeAgentId) });
+    const networkName = url.searchParams.get("network") ?? undefined;
+    return jsonResponse({ agents: listAgents(excludeAgentId, networkName) });
   }
 
   if (
@@ -170,6 +173,8 @@ function registerAgent(input) {
       const updated = {
         ...existing,
         name: input.name,
+        networkName: input.networkName,
+        networkRole: input.networkRole,
         status: "online",
         lastSeenAt: now,
       };
@@ -179,13 +184,18 @@ function registerAgent(input) {
         updated.role = input.role;
       }
       store.agents.set(updated.id, updated);
+      markDuplicateAgentsOffline(input, updated.id);
       return updated;
     }
   }
 
+  markDuplicateAgentsOffline(input);
+
   const agent = {
     id: `agent_${randomUUID()}`,
     name: input.name,
+    networkName: input.networkName,
+    networkRole: input.networkRole,
     sessionId: input.sessionId,
     status: "online",
     createdAt: now,
@@ -199,9 +209,33 @@ function registerAgent(input) {
   return agent;
 }
 
-function listAgents(excludeAgentId) {
+function markDuplicateAgentsOffline(input, excludeAgentId) {
+  const now = new Date().toISOString();
+
+  for (const agent of store.agents.values()) {
+    if (
+      agent.id === excludeAgentId ||
+      agent.networkName !== input.networkName ||
+      agent.name !== input.name ||
+      agent.status === "offline"
+    ) {
+      continue;
+    }
+
+    store.agents.set(agent.id, {
+      ...agent,
+      status: "offline",
+      lastSeenAt: now,
+    });
+  }
+}
+
+function listAgents(excludeAgentId, networkName) {
   return Array.from(store.agents.values()).filter(
-    (agent) => agent.status === "online" && agent.id !== excludeAgentId,
+    (agent) =>
+      agent.status === "online" &&
+      agent.id !== excludeAgentId &&
+      (networkName === undefined || agent.networkName === networkName),
   );
 }
 
@@ -220,6 +254,8 @@ function createMessage(input) {
   if (!store.agents.has(input.fromAgentId) || !store.agents.has(input.toAgentId)) {
     throw new RequestError(ERROR_CODES.agentNotFound, "Agent does not exist.", 404);
   }
+  assertSameNetwork(input.fromAgentId, input.toAgentId);
+  assertNetworkHostOnline(input.fromAgentId);
 
   const now = new Date().toISOString();
   const message = {
@@ -235,6 +271,48 @@ function createMessage(input) {
   }
   store.messages.set(message.id, message);
   return message;
+}
+
+function assertNetworkHostOnline(senderAgentId) {
+  const sender = store.agents.get(senderAgentId);
+  if (sender === undefined || sender.networkRole === "host") {
+    return;
+  }
+
+  const hostOnline = Array.from(store.agents.values()).some((agent) => {
+    return (
+      agent.networkName === sender.networkName &&
+      agent.networkRole === "host" &&
+      agent.status === "online"
+    );
+  });
+
+  if (!hostOnline) {
+    throw new RequestError(
+      ERROR_CODES.hostOffline,
+      "Network host is offline. This network is no longer available.",
+      409,
+    );
+  }
+}
+
+function assertSameNetwork(fromAgentId, toAgentId) {
+  const fromAgent = store.agents.get(fromAgentId);
+  const toAgent = store.agents.get(toAgentId);
+
+  if (
+    fromAgent === undefined ||
+    toAgent === undefined ||
+    fromAgent.networkName === toAgent.networkName
+  ) {
+    return;
+  }
+
+  throw new RequestError(
+    ERROR_CODES.networkMismatch,
+    "Target agent is not in the current network.",
+    409,
+  );
 }
 
 function getInbox(agentId) {
@@ -279,6 +357,44 @@ function markMessageDelivered(messageId) {
   return updated;
 }
 
+function markAgentOffline(agentId) {
+  const agent = store.agents.get(agentId);
+  if (agent === undefined || agent.status === "offline") {
+    return null;
+  }
+
+  const offline = {
+    ...agent,
+    status: "offline",
+    lastSeenAt: new Date().toISOString(),
+  };
+  store.agents.set(agentId, offline);
+
+  if (offline.networkRole !== "host") {
+    return null;
+  }
+
+  const recipientAgentIds = Array.from(store.agents.values())
+    .filter((candidate) => {
+      return (
+        candidate.networkName === offline.networkName &&
+        candidate.networkRole === "member" &&
+        candidate.status === "online"
+      );
+    })
+    .map((candidate) => candidate.id);
+
+  return {
+    event: {
+      type: "network.host.offline",
+      networkName: offline.networkName,
+      hostAgentId: offline.id,
+      hostName: offline.name,
+    },
+    recipientAgentIds,
+  };
+}
+
 function replyToMessage(messageId, input) {
   const original = store.messages.get(messageId);
   if (original === undefined) {
@@ -294,18 +410,40 @@ function replyToMessage(messageId, input) {
 }
 
 function publishMessageCreated(message) {
-  const clients = eventClients.get(message.toAgentId);
+  publishToAgent(message.toAgentId, { type: "message.created", message });
+}
+
+function publishToAgent(agentId, event) {
+  const clients = eventClients.get(agentId);
   if (clients === undefined) {
     return;
   }
 
-  const payload = JSON.stringify({ type: "message.created", message });
+  const payload = JSON.stringify(event);
   for (const controller of clients) {
-    controller.enqueue(`event: message.created\ndata: ${payload}\n\n`);
+    controller.enqueue(`event: ${event.type}\ndata: ${payload}\n\n`);
   }
 }
 
 function createEventStream(agentId, signal) {
+  let activeController;
+  let activeClients;
+
+  function closeStream(controller, clients) {
+    if (!clients.has(controller)) {
+      return;
+    }
+
+    clients.delete(controller);
+    if (clients.size === 0) {
+      eventClients.delete(agentId);
+      handleAgentEventStreamClosed(agentId);
+    }
+    console.log(`[pi-link] sse disconnected agent=${agentId}`);
+    activeController = undefined;
+    activeClients = undefined;
+  }
+
   const stream = new ReadableStream({
     start(controller) {
       const encoder = new TextEncoder();
@@ -318,21 +456,24 @@ function createEventStream(agentId, signal) {
       const clients = eventClients.get(agentId) ?? new Set();
       clients.add(textController);
       eventClients.set(agentId, clients);
+      activeController = textController;
+      activeClients = clients;
       textController.enqueue("event: connected\ndata: {}\n\n");
       console.log(`[pi-link] sse connected agent=${agentId}`);
 
       signal.addEventListener(
         "abort",
         () => {
-          clients.delete(textController);
-          if (clients.size === 0) {
-            eventClients.delete(agentId);
-          }
+          closeStream(textController, clients);
           controller.close();
-          console.log(`[pi-link] sse disconnected agent=${agentId}`);
         },
         { once: true },
       );
+    },
+    cancel() {
+      if (activeController !== undefined && activeClients !== undefined) {
+        closeStream(activeController, activeClients);
+      }
     },
   });
 
@@ -345,21 +486,49 @@ function createEventStream(agentId, signal) {
   });
 }
 
+function handleAgentEventStreamClosed(agentId) {
+  const result = markAgentOffline(agentId);
+  if (result === null) {
+    return;
+  }
+
+  for (const recipientAgentId of result.recipientAgentIds) {
+    publishToAgent(recipientAgentId, result.event);
+  }
+}
+
 async function parseRegisterAgentInput(request) {
   const body = await readJsonBody(request);
   const name = readString(body, "name");
   const sessionId = readString(body, "sessionId");
+  const networkName = readString(body, "networkName");
+  const networkRole = readNetworkRole(body);
   const role = readOptionalString(body, "role");
 
-  if (name === null || sessionId === null) {
+  if (name === null || sessionId === null || networkName === null) {
     throw new RequestError(
       ERROR_CODES.invalidRequest,
-      "name and sessionId are required.",
+      "name, sessionId, and networkName are required.",
       400,
     );
   }
 
-  return role === undefined ? { name, sessionId } : { name, sessionId, role };
+  if (networkRole === null) {
+    throw new RequestError(
+      ERROR_CODES.invalidRequest,
+      "networkRole must be host or member.",
+      400,
+    );
+  }
+
+  return role === undefined
+    ? { name, sessionId, networkName, networkRole }
+    : { name, sessionId, networkName, networkRole, role };
+}
+
+function readNetworkRole(body) {
+  const value = readString(body, "networkRole");
+  return value === "host" || value === "member" ? value : null;
 }
 
 async function parseCreateMessageInput(request) {
@@ -438,11 +607,15 @@ function toWebRequest(incoming) {
   const protocol = incoming.socket.encrypted ? "https" : "http";
   const host = incoming.headers.host ?? `${hostname}:${port}`;
   const url = `${protocol}://${host}${incoming.url ?? "/"}`;
+  const abortController = new AbortController();
+  incoming.on("close", () => abortController.abort());
+
   return new Request(url, {
     method: incoming.method,
     headers: incoming.headers,
     body: incoming.method === "GET" || incoming.method === "HEAD" ? undefined : incoming,
     duplex: "half",
+    signal: abortController.signal,
   });
 }
 

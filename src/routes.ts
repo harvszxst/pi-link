@@ -1,8 +1,9 @@
 import { ERROR_CODES, SERVICE_NAME, VERSION } from "./constants";
-import { createEventStream, publishMessageCreated } from "./events";
+import { createEventStream, publishMessageCreated, publishToAgent } from "./events";
 import { StoreError, store } from "./store";
 import type {
   CreateMessageInput,
+  NetworkRole,
   RegisterAgentInput,
   ReplyToMessageInput,
 } from "./types";
@@ -66,7 +67,8 @@ async function routeRequest(
 
   if (request.method === "GET" && url.pathname === "/agents") {
     const excludeAgentId = url.searchParams.get("exclude") ?? undefined;
-    const agents = store.listAgents(excludeAgentId);
+    const networkName = url.searchParams.get("network") ?? undefined;
+    const agents = store.listAgents(excludeAgentId, networkName);
     return jsonResponse({ agents });
   }
 
@@ -85,7 +87,7 @@ async function routeRequest(
     }
 
     server?.timeout(request, 0);
-    return createEventStream(agentId, request.signal);
+    return createEventStream(agentId, request.signal, handleAgentEventStreamClosed);
   }
 
   if (
@@ -182,14 +184,22 @@ async function parseRegisterAgentInput(
   const body = await readJsonBody(request);
   const name = readString(body, "name");
   const sessionId = readString(body, "sessionId");
+  const networkName = readString(body, "networkName");
+  const networkRole = readNetworkRole(body);
   const role = readOptionalString(body, "role");
 
-  if (name === null || sessionId === null) {
-    throwInvalidRequest("name and sessionId are required.");
+  if (name === null || sessionId === null || networkName === null) {
+    throwInvalidRequest("name, sessionId, and networkName are required.");
+  }
+
+  if (networkRole === null) {
+    throwInvalidRequest("networkRole must be host or member.");
   }
 
   const input: RegisterAgentInput = {
     name,
+    networkName,
+    networkRole,
     sessionId,
   };
 
@@ -198,6 +208,11 @@ async function parseRegisterAgentInput(
   }
 
   return input;
+}
+
+function readNetworkRole(body: Record<string, unknown>): NetworkRole | null {
+  const value = readString(body, "networkRole");
+  return value === "host" || value === "member" ? value : null;
 }
 
 /**
@@ -275,10 +290,24 @@ function storeErrorResponse(error: StoreError): Response {
   switch (error.code) {
     case ERROR_CODES.invalidRequest:
       return jsonError(error.code, error.message, 400);
+    case ERROR_CODES.hostOffline:
+    case ERROR_CODES.networkMismatch:
+      return jsonError(error.code, error.message, 409);
     case ERROR_CODES.agentNotFound:
     case ERROR_CODES.messageNotFound:
       return jsonError(error.code, error.message, 404);
     case ERROR_CODES.serverError:
       return jsonError(error.code, error.message, 500);
+  }
+}
+
+function handleAgentEventStreamClosed(agentId: string): void {
+  const result = store.markAgentOffline(agentId);
+  if (result === null) {
+    return;
+  }
+
+  for (const recipientAgentId of result.recipientAgentIds) {
+    publishToAgent(recipientAgentId, result.event);
   }
 }
